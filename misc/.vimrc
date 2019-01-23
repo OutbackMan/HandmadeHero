@@ -70,15 +70,30 @@ tnoremap <esc> <c-w>:
 
 command! -nargs=1 -complete=file FF call OpenFileInsideInactiveSplit(<f-args>)
 
-" results of vimgrep will go into same buffer, so have command
-" that handles this buffer movement behind the scenes
-" <c-r><c-w> to insert current word
-" command! -nargs=1 FW call VimgrepQuickfixInsideInactiveSplit(<f-args>)
+" NOTE(Ryan): <c-r><c-w> to insert current word
+command! -nargs=1 FW call VimgrepQuickfixInsideInactiveSplit(<f-args>)
 function! VimgrepQuickfixInsideInactiveSplit(search_str)
-  " split logic here
-  execute 'vimgrep /' . a:search_str . '/gj **/*.[ch]'  
+  if g:left_vsplit_buf_is_active
+    silent! wincmd l
+    let g:in_opened_quickfix = 1
+    silent! execute 'vimgrep /' . a:search_str . '/g **/*.[ch]'  
+    if g:right_vsplit_buf_num != g:left_vsplit_buf_num
+      silent! execute "bdelete! " . g:right_vsplit_buf_num
+    endif
+    let g:right_vsplit_buf_num = bufnr("%")
+    let g:left_vsplit_buf_is_active = 0
+  else
+    silent! wincmd h
+    let g:in_opened_quickfix = 1
+    silent! execute 'vimgrep /' . a:search_str . '/g **/*.[ch]'  
+    if g:left_vsplit_buf_num != g:right_vsplit_buf_num
+      silent! execute "bdelete! " . g:left_vsplit_buf_num
+    endif
+    let g:left_vsplit_buf_num = bufnr("%")
+    let g:left_vsplit_buf_is_active = 1
+  endif 
 endfunction
-" also want convenience maps for :cn and :cp and to close
+nnoremap n g:in_opened_quickfix ? :cn<CR> : n
 
 function! OpenFileInsideInactiveSplit(file_name)
   " NOTE(Ryan): On first file opening, want to stay on left buf
@@ -145,12 +160,7 @@ function! Build()
   call term_sendkeys(bufnr("%"), g:build_cmd . "\<CR>")
 endfunction
 
-
-" perhaps should change to 'n' and 'shift-n' for movement
 function! TabSelectOrPopupOrIndent()
-  if pumvisible()
-    return "\<C-N>"
-  endif
   if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'
     return "\<Tab>"
   else
@@ -160,4 +170,5 @@ endfunction
 inoremap <expr> <Tab> TabSelectOrPopupOrIndent()
 inoremap <expr> <CR> pumvisible() ? "\<C-Y>" : "\<CR>"
 inoremap <expr> <Esc> pumvisible() ? "\<C-E>" : "\<Esc>"
-
+inoremap <expr> n pumvisible() ? "\<C-N>" : 'n'
+inoremap <expr> <S-N> pumvisible() ? "\<C-P>" : "\<S-N>"
