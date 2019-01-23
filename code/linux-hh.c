@@ -1,6 +1,7 @@
 #include "hh.h" // to call game
 // platform specific helpers #include "linux-hh.h" 
 
+// <windows.h>
 
 // although wanting to use XCB, documentation is sparse and doesn't support opengl
 #include <X11/Xlib.h>

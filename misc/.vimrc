@@ -44,6 +44,7 @@ endif
 
 autocmd VimEnter * call VSplitWindow()  
 
+
 function! VSplitWindow()
   let g:left_vsplit_buf_num = bufnr("%")     
   silent! vsplit __SCRATCH__
@@ -68,6 +69,16 @@ nnoremap <c-space> silent! call MoveToOtherVSplitWindow()
 tnoremap <esc> <c-w>:
 
 command! -nargs=1 -complete=file FF call OpenFileInsideInactiveSplit(<f-args>)
+
+" results of vimgrep will go into same buffer, so have command
+" that handles this buffer movement behind the scenes
+" <c-r><c-w> to insert current word
+" command! -nargs=1 FW call VimgrepQuickfixInsideInactiveSplit(<f-args>)
+function! VimgrepQuickfixInsideInactiveSplit(search_str)
+  " split logic here
+  execute 'vimgrep /' . a:search_str . '/gj **/*.[ch]'  
+endfunction
+" also want convenience maps for :cn and :cp and to close
 
 function! OpenFileInsideInactiveSplit(file_name)
   " NOTE(Ryan): On first file opening, want to stay on left buf
@@ -135,6 +146,7 @@ function! Build()
 endfunction
 
 
+" perhaps should change to 'n' and 'shift-n' for movement
 function! TabSelectOrPopupOrIndent()
   if pumvisible()
     return "\<C-N>"
@@ -148,3 +160,4 @@ endfunction
 inoremap <expr> <Tab> TabSelectOrPopupOrIndent()
 inoremap <expr> <CR> pumvisible() ? "\<C-Y>" : "\<CR>"
 inoremap <expr> <Esc> pumvisible() ? "\<C-E>" : "\<Esc>"
+
