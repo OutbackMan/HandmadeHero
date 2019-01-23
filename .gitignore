@@ -1,0 +1,12 @@
+*
+
+!.gitattributes
+!.gitignore
+
+!linux-build.sh
+!windows-build.bat
+!mac-build.sh
+
+!*/
+!/code/**/*.[ch]
+!/misc/**/*.vimrc
