@@ -1,17 +1,14 @@
-" also need to set autocomplete
-
 set nocompatible
 
-syntax on
-
+set fileencoding=utf-8 encoding=utf-8
 set noswapfile noundofile nobackup
-set modifiable
-set expandtab shiftround shiftwidth=2 softtabstop=2 tabstop=2
+set expandtab shiftwidth=2 shiftround 
+set softtabstop=2 tabstop=2
 
+syntax on
 set number
 
 set incsearch hlsearch 
-set fileencoding=utf-8 encoding=utf-8
 
 set cc=80
 set showmatch
@@ -39,7 +36,7 @@ if !exists('g:os')
     autocmd GUIEnter * simalt ~x
   else
     let g:os = substitute(system('uname'), '\n', '', '')
-    if g:os ?= 'Linux'
+    if g:os ==? 'Linux'
       autocmd GUIEnter * call system('wmctrl -i -b add,maximized_vert,maximized_horz -r' . v:windowid)
     endif
   endif
@@ -136,3 +133,18 @@ function! Build()
 
   call term_sendkeys(bufnr("%"), g:build_cmd . "\<CR>")
 endfunction
+
+
+function! TabSelectOrPopupOrIndent()
+  if pumvisible()
+    return "\<C-N>"
+  endif
+  if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'
+    return "\<Tab>"
+  else
+    return "\<C-X>\<C-N>"
+  endif
+endfunction
+inoremap <expr> <Tab> TabSelectOrPopupOrIndent()
+inoremap <expr> <CR> pumvisible() ? "\<C-Y>" : "\<CR>"
+inoremap <expr> <Esc> pumvisible() ? "\<C-E>" : "\<Esc>"
