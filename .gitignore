@@ -8,5 +8,5 @@
 !mac-build.sh
 
 !*/
-!/code/**/*.[ch]
+!/code/**/*.[chm]
 !/misc/**/*.vimrc
