@@ -1,34 +1,31 @@
 set nocompatible
 
-set fileencoding=utf-8 encoding=utf-8
+set encoding=iso-8859-2
 set noswapfile noundofile nobackup
-set expandtab shiftwidth=2 shiftround 
-set softtabstop=2 tabstop=2
 
-syntax on
-set number
+set expandtab softtabstop=2 tabstop=2
+set shiftwidth=2 shiftround 
+set autoindent autowrite
+
+set mouse=a
 
 set incsearch hlsearch 
-
-set cc=80
-set showmatch
-set backspace=indent,eol,start
-
-set laststatus=2
-set showmode
-
-set autoindent
-set autowrite
-
-set scrolloff=5
-set nowrap
-set mouse=a
 
 set foldenable
 set foldmethod=manual
 set foldlevelstart=0
 
-set guifont=Monospace\ 14
+syntax on
+set number
+set guifont=Monospace\ 16
+set cc=80
+set showmatch
+set backspace=indent,eol,start
+set laststatus=2
+set showmode
+set scrolloff=5
+set nowrap
+
 
 if !exists('g:os')
   if has ('win32') || has('win64')
@@ -36,14 +33,13 @@ if !exists('g:os')
     autocmd GUIEnter * simalt ~x
   else
     let g:os = substitute(system('uname'), '\n', '', '')
-    if g:os ==? 'Linux'
+    if g:os ==# 'Linux'
       autocmd GUIEnter * call system('wmctrl -i -b add,maximized_vert,maximized_horz -r' . v:windowid)
     endif
   endif
 endif
 
 autocmd VimEnter * call VSplitWindow()  
-
 
 function! VSplitWindow()
   let g:left_vsplit_buf_num = bufnr("%")     
@@ -65,35 +61,10 @@ function! MoveToOtherVSplitWindow()
   endif
 endfunction
 
-nnoremap <c-space> silent! call MoveToOtherVSplitWindow()
-tnoremap <esc> <c-w>:
+nnoremap <C-Space> silent! call MoveToOtherVSplitWindow()
+tnoremap <Esc> <C-W>:
 
 command! -nargs=1 -complete=file FF call OpenFileInsideInactiveSplit(<f-args>)
-
-" NOTE(Ryan): <c-r><c-w> to insert current word
-command! -nargs=1 FW call VimgrepQuickfixInsideInactiveSplit(<f-args>)
-function! VimgrepQuickfixInsideInactiveSplit(search_str)
-  if g:left_vsplit_buf_is_active
-    silent! wincmd l
-    let g:in_opened_quickfix = 1
-    silent! execute 'vimgrep /' . a:search_str . '/g **/*.[ch]'  
-    if g:right_vsplit_buf_num != g:left_vsplit_buf_num
-      silent! execute "bdelete! " . g:right_vsplit_buf_num
-    endif
-    let g:right_vsplit_buf_num = bufnr("%")
-    let g:left_vsplit_buf_is_active = 0
-  else
-    silent! wincmd h
-    let g:in_opened_quickfix = 1
-    silent! execute 'vimgrep /' . a:search_str . '/g **/*.[ch]'  
-    if g:left_vsplit_buf_num != g:right_vsplit_buf_num
-      silent! execute "bdelete! " . g:left_vsplit_buf_num
-    endif
-    let g:left_vsplit_buf_num = bufnr("%")
-    let g:left_vsplit_buf_is_active = 1
-  endif 
-endfunction
-nnoremap n g:in_opened_quickfix ? :cn<CR> : n
 
 function! OpenFileInsideInactiveSplit(file_name)
   " NOTE(Ryan): On first file opening, want to stay on left buf
@@ -124,7 +95,7 @@ function! OpenFileInsideInactiveSplit(file_name)
   endif 
 endfunction
 
-nnoremap <c-b> :silent! call Build()<cr>
+nnoremap <C-B> :silent! call Build()<CR>
 
 function! Build()
   if g:left_vsplit_buf_is_active
@@ -141,24 +112,41 @@ function! Build()
   " NOTE(Ryan): never manually close window
   " NOTE(Ryan): inside terminal, use ctrl-w
   
-  if &filetype ==? 'c'
-    if g:os ==? 'Windows'
-      let g:build_cmd = findfile("windows-build.bat", ".;")
-    else if g:os ==? 'Linux'
-      let g:build_cmd = findfile("linux-build.sh", ".;")
-    else
-      let g:build_cmd = findfile("mac-build.sh", ".;")
-    else if &filetype ==? 'python'
-      " --extension-pkg-whitelist=cv2 --> for modules with c extensions
-      "  use winpdb from google code source if require a debugger
-      let g:build_cmd = 'python -m pylint --disable=R,C main.py'
-    endif
+  if g:os ==# 'Windows'
+    let g:build_cmd = findfile("windows-build.bat", ".;")
+  else if g:os ==# 'Linux'
+    let g:build_cmd = findfile("linux-build.sh", ".;")
   else
-    let g:build_cmd = 'echoerr NO BUILD CONFIG SET FOR FILETYPE'
-  endif 
+    let g:build_cmd = findfile("mac-build.sh", ".;")
+  endif   
 
   call term_sendkeys(bufnr("%"), g:build_cmd . "\<CR>")
 endfunction
+
+" NOTE(Ryan): <C-R><C-W> to insert current word
+command! -nargs=1 FW call VimgrepQuickfixInsideInactiveSplit(<f-args>)
+function! VimgrepQuickfixInsideInactiveSplit(search_str)
+  if g:left_vsplit_buf_is_active
+    silent! wincmd l
+    let g:in_opened_quickfix = 1
+    silent! execute 'vimgrep /' . a:search_str . '/g **/*.[chm]' 
+    if g:right_vsplit_buf_num != g:left_vsplit_buf_num
+      silent! execute "bdelete! " . g:right_vsplit_buf_num
+    endif
+    let g:right_vsplit_buf_num = bufnr("%")
+    let g:left_vsplit_buf_is_active = 0
+  else
+    silent! wincmd h
+    let g:in_opened_quickfix = 1
+    silent! execute 'vimgrep /' . a:search_str . '/g **/*.[ch]'  
+    if g:left_vsplit_buf_num != g:right_vsplit_buf_num
+      silent! execute "bdelete! " . g:left_vsplit_buf_num
+    endif
+    let g:left_vsplit_buf_num = bufnr("%")
+    let g:left_vsplit_buf_is_active = 1
+  endif 
+endfunction
+nnoremap n g:in_opened_quickfix ? :cn<CR> : n
 
 function! TabSelectOrPopupOrIndent()
   if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'
