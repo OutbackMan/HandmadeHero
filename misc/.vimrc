@@ -33,9 +33,6 @@ if !exists('g:os')
     autocmd GUIEnter * simalt ~x
   else
     let g:os = substitute(system('uname'), '\n', '', '')
-    if g:os ==# 'Linux'
-      autocmd GUIEnter * call system('wmctrl -i -b add,maximized_vert,maximized_horz -r' . v:windowid)
-    endif
   endif
 endif
 
