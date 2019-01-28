@@ -7,7 +7,7 @@ SET common_compiler_flags=-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-c
  -fuse-ld=lld-link.exe -lgdi32
 
 SET debug_compiler_flags=-fno-omit-frame-pointer -fno-optimize-sibling-calls^
- -gcodeview -Wl,/debug,/pdb:windows-hh.pdb
+ -g -gcodeview -Wl,/debug,/pdb:windows-hh.pdb
 
 SET release_compiler_flags=-Ofast
 
