@@ -44,7 +44,9 @@ if !exists('g:os')
   endif
 endif
 
+tnoremap <silent> <Esc> <C-W>:
 function! Build()
+  tabedit __BUILD__
   terminal ++curwin
 
   if g:os ==# 'Windows'
@@ -57,7 +59,8 @@ function! Build()
 
   call term_sendkeys(bufnr("%"), g:build_cmd . "\<CR>")
 endfunction
-nnoremap <C-B> :silent! call Build()<CR>
+nnoremap <silent> <C-B> :call Build()<CR>
+tnoremap <silent> <Tab> exit<CR>
 
 function! TabSelectOrPopupOrIndent()
   if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'
