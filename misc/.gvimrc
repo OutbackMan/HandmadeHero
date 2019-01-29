@@ -26,7 +26,6 @@ else
   set guifont=Consolas:h11:cANSI
 endif
 
-set cc=80
 set showmatch
 set backspace=indent,eol,start
 set laststatus=2
@@ -44,7 +43,6 @@ if !exists('g:os')
   endif
 endif
 
-tnoremap <silent> <Esc> <C-W>:
 function! Build()
   tabedit __BUILD__
   terminal ++curwin
@@ -65,8 +63,7 @@ nnoremap <silent> <C-B> :call Build()<CR>
 " NOTE(Ryan): Had cross-platform issues trying to close tab with single
 " command
 tnoremap <silent> <C-Tab> exit<CR><C-W>:tabclose!<CR>:execute "bdelete! " . bufnr("$")<CR>
-" TODO(Ryan): Strive to use codeclap when not so buggy
-" tnoremap <silent> <C-CR> cdtdebug.sh -e build/linux-hh<CR>
+tnoremap <silent> <Esc> <C-W>N
 
 
 function! TabSelectOrPopupOrIndent()
