@@ -49,18 +49,22 @@ function! Build()
   tabedit __BUILD__
   terminal ++curwin
 
+  " NOTE(Ryan): Could not get cross-platform findfile() working
+  " So, just have to :cd into root directory
   if g:os ==# 'Windows'
-    let g:build_cmd = findfile("windows-build.bat", ".;")
+    let g:build_cmd = "windows-build.bat" 
   elseif g:os ==# 'Linux'
-    let g:build_cmd = findfile("linux-build.sh", ".;")
+    let g:build_cmd = "bash linux-build.sh"
   else
-    let g:build_cmd = findfile("mac-build.sh", ".;")
+    let g:build_cmd = "bash mac-build.sh"
   endif   
 
   call term_sendkeys(bufnr("%"), g:build_cmd . "\<CR>")
 endfunction
 nnoremap <silent> <C-B> :call Build()<CR>
-tnoremap <silent> <Tab> exit<CR>
+" NOTE(Ryan): Had cross-platform issues trying to close tab with single
+" command
+tnoremap <silent> <C-Tab> exit<CR><C-W>:tabclose!<CR>:execute "bdelete! " . bufnr("$")<CR>
 
 function! TabSelectOrPopupOrIndent()
   if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'
