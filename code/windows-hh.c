@@ -19,8 +19,8 @@ main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
       uint y = paint.rcPaint.right;
       uint width = paint.rcPaint.right - paint.rcPaint.left; 
       uint height = paint.rcPaint.bottom - paint.rcPaint.top; 
-      PERSIST DWORD operation = BLACKNESS;
-      PatBlt(device_context, x, y, width, height, operation);
+      // TODO(Ryan): Aspect ratio correction before blit --> get to day 5 and then do the debugger walkthrough
+      update_window(device_context, x, y, width, height);
       EndPaint(window, &paint);
     } break;
     case WM_SIZE: {
@@ -40,11 +40,32 @@ main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
   return result;
 }
 
+typedef struct {
+  BITMAPINFO info;
+  void* memory;
+  uint width;
+  uint height;
+  uint pitch;
+} WindowsBackBuffer;
+
+void
+windows_create_back_buffer(WindowsBackBuffer* restrict back_buffer, uint width, uint height)
+{
+  if (back_buffer->memory != NULL) {
+    VirtualFree(back_buffer->memory, 0, MEM_RELEASE);  
+  }
+
+  
+}
+
 // NOTE(Ryan): Recieved redefintion error on using char** for LPSTR
 // Keep in mind for 'CALLBACK' functions
 int CALLBACK
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
+  WindowsBackBuffer back_buffer = {0};
+  windows_create_back_buffer(&back_buffer, 1280, 720);
+
   WNDCLASS window_class = {0};
   window_class.lpfnWndProc = main_window_callback;
   window_class.hInstance = instance;
