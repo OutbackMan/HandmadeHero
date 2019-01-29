@@ -21,7 +21,7 @@ set number
 if has("gui_gtk3")
   set guifont=Inconsolata\ 12
 elseif has("gui_macvim")
-  set guifont=Menlo\ Regular:14
+  set guifont=Menlo\ Regular:h14
 else
   set guifont=Consolas:h11:cANSI
 endif
