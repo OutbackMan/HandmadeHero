@@ -3,35 +3,57 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+#include <sys/mman.h>
+
 // dpkg internally installs .deb packages, while apt handles dependency management
 // ubuntu releases more features than debian which is more stable (suitable for servers)
 // apt-get install/remove/purge; apt-cache search/policy; apt list --installed; dpkg -L
 // grep -rnw . -e "xcb_setup_roots_iterator"
 
 typedef struct {
-  XImage* image;
-  Display* display;
-  int screen_id;
-} LinuxPixelBufferInfo;
-
-typedef struct {
-  int id;
-  uint width;
-  uint height;
-} LinuxWindow;
-
-typedef struct {
-  LinuxPixelBufferOutputInfo* output_info;
+  XImage* info;
   void* memory;
   uint width;
   uint height;
   uint pitch;
 } LinuxPixelBuffer;
 
-INTERNAL void 
-linux_render_grid(LinuxPixelBuffer* pixel_buffer)
+// NOTE(Ryan): It seems have to do manual stretching
+INTERNAL void
+linux_resize_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, uint width, uint height)
 {
+  if (pixel_buffer->memory != NULL) {
+    munmap(); 
+  }
 
+  pixel_buffer->width = width;
+  pixel_buffer->height = height;
+
+  uint bytes_per_pixel = 4; 
+  uint pixel_buffer_size = pixel_buffer->width * bytes_per_pixel * pixel_buffer->height;
+
+  pixel_buffer->memory = mmap(
+                              NULL, 
+                              pixel_buffer_size, 
+                              PROT_READ | PROT_WRITE, 
+                              MAP_PRIVATE | MAP_ANONYMOUS, 
+                              -1, 0
+                             );
+
+  pixel_buffer->pitch = pixel_buffer->width * bytes_per_pixel;
+
+  pixel_buffer->info = XCreateImage(
+		                                display, 
+				                            screen_info.visual, 
+				                            screen_info.depth, 
+				                            ZPixmap, 
+				                            0, 
+				                            pixel_buffer->memory, 
+				                            pixel_buffer->width, 
+				                            pixel_buffer->height, 
+				                            bytes_per_pixel * 8, 
+				                            0
+				                           );
 }
 
 INTERNAL void
@@ -48,48 +70,13 @@ linux_display_pixel_buffer_in_window(LinuxPixelBuffer* pixel_buffer, LinuxWindow
 	   );
 }
 
-INTERNAL void
-linux_create_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, uint width, uint height)
-{
-  uint bits_per_pixel = 32;
-  uint bytes_per_pixel = bits_per_pixel / 8;
-
-  pixel_buffer->width = width;
-  pixel_buffer->height = height;
-  pixel_buffer->pitch = width * bytes_per_pixel;
-
-  pixel_buffer->memory = mmap(
-                              NULL, 
-                              pixel_buffer->pitch * height, 
-                              PROT_READ | PROT_WRITE, 
-                              MAP_PRIVATE | MAP_ANONYMOUS, 
-                              -1, 0
-                             );
-  if (pixel_buffer->memory == MAP_FAILED) {
-    fprintf(stderr, "mmap failed for pixel buffer");
-    exit(1);
-  }
-  // NOTE(Ryan): As no pixel pad, 0 instructs self calculation
-  pixel_buffer->info = XCreateImage(
-		                    global_display, 
-				    global_screen_info.visual, 
-				    global_screen_info.depth, 
-				    ZPixmap, 
-				    0, 
-				    pixel_buffer->memory, 
-				    width, 
-				    height, 
-				    bits_per_pixel, 
-				    0
-				   );
-}
-
-GLOBAL bool global_is_running;
-GLOBAL LinuxPixelBuffer pixel_buffer;
+GLOBAL bool global_want_to_run;
 
 int 
 main(int argc, char* argv[argc + 1])
 {
+  // NOTE(Ryan): C does not support assignment of values to struct, rather initialisation
+  LinuxPixelBuffer pixel_buffer = {0}; 
   linux_create_pixel_buffer(&pixel_buffer, 1280, 720);
 
   Display* display = XOpenDisplay(":0.0");
@@ -101,23 +88,23 @@ main(int argc, char* argv[argc + 1])
     XVisualInfo screen_info = {0};
     // NOTE(Ryan): TrueColor segments 24 bits into RGB-8-8-8
     bool screen_has_desired_properties = XMatchVisualInfo(
-		                                          display, 
-						          default_screen_id, 
-						          desired_bits_per_pixel, 
-						          TrueColor, 
-						          &screen_info
-					                 ); 
+		                                                      display, 
+						                                              default_screen_id, 
+						                                              desired_bits_per_pixel, 
+						                                              TrueColor, 
+						                                              &screen_info
+					                                               ); 
     if (screen_has_desired_properties) {
       XSetWindowAttributes window_attr = {0};
       window_attr.bit_gravity = StaticGravity;
-      window_attr.event_mask = StructureNotifyMask | KeyPressMask | KeyReleaseMask;
+      window_attr.event_mask = StructureNotifyMask; 
       window_attr.background_pixel = 0; 
       window_attr.colormap = XCreateColormap(
-		                             display, 
-					     root_window_id, 
-					     screen_info.visual, 
-					     AllocNone
-					    );
+		                                         display, 
+					                                   root_window_id, 
+					                                   screen_info.visual, 
+					                                   AllocNone
+					                                  );
       unsigned long attr_mask = CWBackPixel | CWColormap | CWEventMask | CWBitGravity;
 
       int window_id = XCreateWindow(
