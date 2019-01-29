@@ -65,8 +65,9 @@ nnoremap <silent> <C-B> :call Build()<CR>
 " NOTE(Ryan): Had cross-platform issues trying to close tab with single
 " command
 tnoremap <silent> <C-Tab> exit<CR><C-W>:tabclose!<CR>:execute "bdelete! " . bufnr("$")<CR>
+" TODO(Ryan): Strive to use codeclap when not so buggy
+" tnoremap <silent> <C-CR> cdtdebug.sh -e build/linux-hh<CR>
 
-" TODO(Ryan): Create debugger mapping (consider misc/codeclap.sh)
 
 function! TabSelectOrPopupOrIndent()
   if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'

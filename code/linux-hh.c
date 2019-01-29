@@ -1,14 +1,8 @@
 #include "hh.h" // to call game
 // platform specific helpers #include "linux-hh.h" 
 
-// <windows.h>
-
-// although wanting to use XCB, documentation is sparse and doesn't support opengl
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-
-#include <sys/mman.h>
-// sometimes have to interact with the window manager (there is a window manager spec)
 
 // dpkg internally installs .deb packages, while apt handles dependency management
 // ubuntu releases more features than debian which is more stable (suitable for servers)
