@@ -1,5 +1,4 @@
-#include "hh.h" // to call game
-// platform specific helpers #include "linux-hh.h" 
+#include "hh.h"
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -23,7 +22,7 @@ typedef struct {
 
 typedef struct {
   LinuxPixelBufferOutputInfo* output_info;
-  byte* memory;
+  void* memory;
   uint width;
   uint height;
   uint pitch;
@@ -50,7 +49,7 @@ linux_display_pixel_buffer_in_window(LinuxPixelBuffer* pixel_buffer, LinuxWindow
 }
 
 INTERNAL void
-linux_create_pixel_buffer(LinuxPixelBuffer* pixel_buffer, uint width, uint height)
+linux_create_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, uint width, uint height)
 {
   uint bits_per_pixel = 32;
   uint bytes_per_pixel = bits_per_pixel / 8;
@@ -59,12 +58,17 @@ linux_create_pixel_buffer(LinuxPixelBuffer* pixel_buffer, uint width, uint heigh
   pixel_buffer->height = height;
   pixel_buffer->pitch = width * bytes_per_pixel;
 
-  pixel_buffer->mem = mmap(NULL, pixel_buffer->pitch * height, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (pixel_buffer->mem == MAP_FAILED) {
+  pixel_buffer->memory = mmap(
+                              NULL, 
+                              pixel_buffer->pitch * height, 
+                              PROT_READ | PROT_WRITE, 
+                              MAP_PRIVATE | MAP_ANONYMOUS, 
+                              -1, 0
+                             );
+  if (pixel_buffer->memory == MAP_FAILED) {
     fprintf(stderr, "mmap failed for pixel buffer");
     exit(1);
   }
-  // NOTE(Ryan): Bitmap is something stored locally. Pixmap can be sent to X 
   // NOTE(Ryan): As no pixel pad, 0 instructs self calculation
   pixel_buffer->info = XCreateImage(
 		                    global_display, 
@@ -130,12 +134,6 @@ main(int argc, char* argv[argc + 1])
       if (window_id != 0) {
         XStoreName(display, window_id, "Hello, world!");
 
-        XSizeHints hints = {0};
-	hints.min_width = 600;
-	hints.min_height = 600;
-	hints.flags |= PMinSize;
-	XSetWMNormalHints(display, window, &hints);
-	
         // NOTE(Ryan): This because the window manager fails to correctly close the window, so we tell WM we want access to this
 	Atom WM_DELETE_WINDOW = XInternAtom(display, "WM_DELETE_WINDOW", False);
 	if (!XSetWMProtocols(display, window, &WM_DELETE_WINDOW, 1)) {
@@ -199,9 +197,9 @@ main(int argc, char* argv[argc + 1])
 	  }
 	}
 
-        render_grid(back_buffer);
+   render_grid(back_buffer);
 
-	display_buffer_in_window();
+	 display_buffer_in_window();
 
 	}
 
