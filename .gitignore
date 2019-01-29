@@ -3,10 +3,12 @@
 !.gitattributes
 !.gitignore
 
-!linux-build.sh
+!linux-build.bash
 !windows-build.bat
-!mac-build.sh
+!mac-build.bash
 
 !*/
 !/code/**/*.[chm]
 !/misc/**/*.gvimrc
+!/misc/**/*.bash
+!/misc/**/*.bat

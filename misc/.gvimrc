@@ -54,9 +54,9 @@ function! Build()
   if g:os ==# 'Windows'
     let g:build_cmd = "windows-build.bat" 
   elseif g:os ==# 'Linux'
-    let g:build_cmd = "bash linux-build.sh"
+    let g:build_cmd = "bash linux-build.bash"
   else
-    let g:build_cmd = "bash mac-build.sh"
+    let g:build_cmd = "bash mac-build.bash"
   endif   
 
   call term_sendkeys(bufnr("%"), g:build_cmd . "\<CR>")
@@ -65,6 +65,8 @@ nnoremap <silent> <C-B> :call Build()<CR>
 " NOTE(Ryan): Had cross-platform issues trying to close tab with single
 " command
 tnoremap <silent> <C-Tab> exit<CR><C-W>:tabclose!<CR>:execute "bdelete! " . bufnr("$")<CR>
+
+" TODO(Ryan): Create debugger mapping (consider misc/codeclap.sh)
 
 function! TabSelectOrPopupOrIndent()
   if col('.') == 1 || getline('.')[col('.') - 2] =~? '[ ]'
