@@ -3,6 +3,45 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+#include <alsa/asoundlib.h>
+
+INTERNAL void
+alsa_audio(void)
+{
+  snd_pcm_t* pcm_handle = NULL;
+  snd_pcm_hw_params_t* hw_params = NULL;
+
+  // sound card <-> device
+  // 48000, 4p, 512ps
+  // TODO(Ryan): Investigate on implications of 'default'
+  if (snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0) {
+    // unable to open sound card
+  }
+
+  if (snd_pcm_hw_params_malloc(&hw_params) < 0) {
+    // unable to obtain memory for hw configuration 
+  }
+
+  if (snd_pcm_hw_params_any(pcm_handle, hw_params) < 0) {
+    // unable to load hw configuration
+    goto __ALSA_INIT_ERROR__;
+  }
+
+  if (snd_pcm_hw_params_set_access(pcm_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0) {
+    // unable to set sound buffer to consecutive alternate channel data
+    goto __ALSA_INIT_ERROR__;
+  } 
+
+  if (snd_pcm_hw_params_set_format(pcm_handle, hw_params, SND_PCM_FORMAT_S16_LE) < 0) {
+    goto __ALSA_INIT_ERROR__;
+  } 
+
+__ALSA_INIT_ERROR__:
+  if (hw_params != NULL) {
+    snd_pcm_hw_params_free(hw_params);
+  }
+}
+
 // dpkg internally installs .deb packages, while apt handles dependency management
 // ubuntu releases more features than debian which is more stable (suitable for servers)
 // apt-get install/remove/purge; apt-cache search/policy; apt list --installed; dpkg -L
