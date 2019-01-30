@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <xinput.h>
+#include <dsound.h>
 
 typedef struct {
   BITMAPINFO info;
@@ -52,6 +53,51 @@ windows_display_pixel_buffer_in_window(WindowsPixelBuffer* restrict pixel_buffer
 }
 
 INTERNAL void
+windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
+{
+  LPDIRECTSOUND direct_sound = NULL;
+  if (DirectSoundCreate(NULL, &direct_sound, NULL) == DS_OK) {
+    WAVEFORMATX wave_format = {0};
+    wave_format.wFormatTag = WAVE_FORMAT_PCM;
+    wave_format.nChannels = 2;
+    wave_format.nSamplesPerSec = samples_per_second;
+    wave_format.wBitsPerSample = 16;
+    wave_format.nBlockAlign = (wave_format.nChannels * wave_format.wBitsPerSample) / 8;
+    wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  
+    wave_format.cbSize = 0;
+
+    if (direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY) == DS_OK) { 
+      DSBUFFERDESC buffer_description = {0};
+      buffer_description.dwSize = sizeof(buffer_description);
+      buffer_description.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+ 
+      LPDIRECTSOUNDBUFFER primary_buffer = NULL;
+      if (direct_sound->CreateSoundBuffer(&buffer_description, primary_buffer, NULL) == DS_OK) {
+        if (primary_buffer->SetFormat(&wave_format) != DS_OK) {
+          // TODO(Ryan): primary buffer format set fail
+        } 
+      } else {
+        // TODO(Ryan): primary buffer create fail
+      }
+      DSBUFFERDESC buffer_description = {0};  
+      buffer_description.dwSize = sizeof(buffer_description);
+      buffer_description.dwFlags = 0;
+      buffer_description.dwBufferBytes = buffer_size;
+      buffer_description.lpwdfxFormat = &wave_format;
+      LPDIRECTSOUNDBUFFER secondary_buffer = NULL;
+      if (direct_sound->CreateSoundBuffer(&buffer_description, &secondary_buffer, 0) != DS_OK) {
+        // TODO(Ryan): secondary buffer create fail 
+      } 
+    } else {
+      // TODO(Ryan): cooperative level fail
+    } 
+  } else {
+    // TODO(Ryan): dsound init fail 
+  }
+}
+
+INTERNAL void
 hh_render_gradient(WindowsPixelBuffer* restrict pixel_buffer, uint green_offset, uint blue_offset)
 {
   u8* row = (u8 *)pixel_buffer->memory;
@@ -89,7 +135,6 @@ main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
     case WM_SYSKEYUP:
     case WM_KEYDOWN:
     case WM_KEYUP: {
-      // NOTE(Ryan): SYSKEY for f10 and alt
       u32 vk_code = wparam;
       bool was_down = ((lparam & (1 << 30)) != 0);
       bool is_down = ((lparam & (1 << 31)) == 0);
@@ -102,6 +147,12 @@ main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
             // 'w' is down 
           }
         } 
+      }
+
+      // NOTE(Ryan): Responding to SYSKEY means we have to reimplement alt-f4
+      bool alt_key_was_down = ((lparam & (1 << 29)) != 0);
+      if (vk_code == VK_F4 && alt_key_was_down) {
+        global_want_to_run = false; 
       }
     } break;
     case WM_CLOSE: {
