@@ -9,6 +9,6 @@ release_compiler_flags="-Ofast"
 [ ! -d "build" ] && mkdir build
 pushd build
 
-clang $common_compiler_flags $debug_compiler_flags ../code/mac-hh.c -o mac-hh
+clang $common_compiler_flags $debug_compiler_flags ../code/mac-hh.m -o mac-hh
 
 popd
