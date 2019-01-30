@@ -1,6 +1,7 @@
 #include "hh.h"
 
 #include <windows.h>
+#include <xinput.h>
 
 typedef struct {
   BITMAPINFO info;
@@ -84,6 +85,25 @@ main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 
       EndPaint(window, &paint);
     } break;
+    case WM_SYSKEYDOWN:
+    case WM_SYSKEYUP:
+    case WM_KEYDOWN:
+    case WM_KEYUP: {
+      // NOTE(Ryan): SYSKEY for f10 and alt
+      u32 vk_code = wparam;
+      bool was_down = ((lparam & (1 << 30)) != 0);
+      bool is_down = ((lparam & (1 << 31)) == 0);
+      if (was_down != is_down) {
+        if (vk_code == 'W') {
+          if (was_down) {
+            // 'w' was down 
+          }
+          if (is_down) {
+            // 'w' is down 
+          }
+        } 
+      }
+    } break;
     case WM_CLOSE: {
       global_want_to_run = false;
     } break;
@@ -140,6 +160,16 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
           TranslateMessage(&message);
           DispatchMessageA(&message);
         }
+
+        for (uint controller_index = 0; controller_index < XUSER_MAX_COUNT; ++controller_index) {
+          XINPUT_STATE controller_state = {0};
+          if (XInputGetState(controller_index, &controller_state) == ERROR_SUCCESS) {
+            bool up = controller_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP;
+            int16 stick_x = controller_state.Gamepad.sThumbLX; 
+            x_offset += stick_x >> 12;
+          }
+        }
+
         hh_render_gradient(&global_pixel_buffer, x_offset, y_offset);
 
         windows_display_pixel_buffer_in_window(&global_pixel_buffer, device_context, window_handle);
