@@ -18,12 +18,11 @@ typedef struct {
   uint pitch;
 } LinuxPixelBuffer;
 
-// NOTE(Ryan): It seems have to do manual stretching
 INTERNAL void
-linux_resize_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, uint width, uint height)
+linux_resize_or_create_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, Display* display, XVisualInfo screen_info, uint width, uint height)
 {
   if (pixel_buffer->memory != NULL) {
-    munmap(); 
+    XDestroyImage(pixel_buffer->info);
   }
 
   pixel_buffer->width = width;
@@ -57,17 +56,32 @@ linux_resize_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, uint width, u
 }
 
 INTERNAL void
-linux_display_pixel_buffer_in_window(LinuxPixelBuffer* pixel_buffer, LinuxWindow* window)
+linux_display_pixel_buffer_in_window(LinuxPixelBuffer* restrict pixel_buffer, Display* restrict display, int window_id, int screen_id)
 {
   XPutImage(
-            pixel_buffer->output_info->display, 
-	    window->id, 
-	    DefaultGC(pixel_buffer->output_info->display, pixel_buffer->output_info->screen_id), 
-	    pixel_buffer->output_info->image, 
-	    0, 0, 0, 0, 
-	    window->width,
-	    window->height
-	   );
+            display, 
+	          window_id, 
+	          DefaultGC(display, screen_id), 
+	          pixel_buffer->info, 
+	          0, 0, 0, 0,
+	          pixel_buffer->width,
+	          pixel_buffer->height
+	         );
+}
+
+INTERNAL void
+hh_render_gradient(LinuxPixelBuffer* restrict pixel_buffer, uint green_offset, uint blue_offset)
+{
+  u8* row = (u8 *)pixel_buffer->memory; 
+  for (uint y = 0; y < pixel_buffer->height; ++y) {
+    u32* pixel = (u32 *)row; 
+    for (uint x = 0; x < pixel_buffer->width; ++x) {
+      u32 green = x + green_offset; 
+      u32 blue = y + blue_offset; 
+      *pixel++ = (green << 8 | blue << 16);
+    }
+    row += pixel_buffer->pitch;
+  }
 }
 
 GLOBAL bool global_want_to_run;
@@ -75,9 +89,6 @@ GLOBAL bool global_want_to_run;
 int 
 main(int argc, char* argv[argc + 1])
 {
-  // NOTE(Ryan): C does not support assignment of values to struct, rather initialisation
-  LinuxPixelBuffer pixel_buffer = {0}; 
-  linux_create_pixel_buffer(&pixel_buffer, 1280, 720);
 
   Display* display = XOpenDisplay(":0.0");
   if (display != NULL) {
@@ -89,12 +100,16 @@ main(int argc, char* argv[argc + 1])
     // NOTE(Ryan): TrueColor segments 24 bits into RGB-8-8-8
     bool screen_has_desired_properties = XMatchVisualInfo(
 		                                                      display, 
-						                                              default_screen_id, 
+						                                              screen_id, 
 						                                              desired_bits_per_pixel, 
 						                                              TrueColor, 
 						                                              &screen_info
 					                                               ); 
     if (screen_has_desired_properties) {
+      // NOTE(Ryan): C does not support assignment of values to struct, rather initialisation
+      LinuxPixelBuffer pixel_buffer = {0}; 
+      linux_resize_or_create_pixel_buffer(&pixel_buffer, display, screen_info, 1280, 720);
+   
       XSetWindowAttributes window_attr = {0};
       window_attr.bit_gravity = StaticGravity;
       window_attr.event_mask = StructureNotifyMask; 
@@ -108,98 +123,73 @@ main(int argc, char* argv[argc + 1])
       unsigned long attr_mask = CWBackPixel | CWColormap | CWEventMask | CWBitGravity;
 
       int window_id = XCreateWindow(
-		                    display, 
-				    root_window_id, 
-				    0, 0, 600, 600, 
-				    0, 
-				    screen_info.depth, 
-				    InputOutput,
-		                    screen_info.visual, 
-				    attr_mask, 
-				    &window_attr
-				   );
+		                                display, 
+				                            root_window_id, 
+				                            0, 0, 1280, 720, 
+				                            0, 
+				                            screen_info.depth, 
+				                            InputOutput,
+		                                screen_info.visual, 
+				                            attr_mask, 
+				                            &window_attr
+				                           );
       if (window_id != 0) {
-        XStoreName(display, window_id, "Hello, world!");
+        XStoreName(display, window_id, "Handmade Hero");
 
         // NOTE(Ryan): This because the window manager fails to correctly close the window, so we tell WM we want access to this
-	Atom WM_DELETE_WINDOW = XInternAtom(display, "WM_DELETE_WINDOW", False);
-	if (!XSetWMProtocols(display, window, &WM_DELETE_WINDOW, 1)) {
-          // exit()	
-	}
+	      Atom WM_DELETE_WINDOW = XInternAtom(display, "WM_DELETE_WINDOW", False);
+	      if (!XSetWMProtocols(display, window_id, &WM_DELETE_WINDOW, 1)) {
+          // TODO(Ryan): Logging
+	      }
 
-        XMapWindow(display, window);
-	// NOTE(Ryan): Xlib may build up requests for efficiency
+        XMapWindow(display, window_id);
+ 	      // NOTE(Ryan): Xlib may build up requests for efficiency
         XFlush(display);	
 
-	LinuxPixelBuffer pixel_buffer = {0};
-	linux_resize_pixel_buffer(&pixel_buffer, 1280, 720);
-
-	global_is_running = true;
-	XEvent event = {0};
-	while (global_is_running) {
+	      global_want_to_run = true;
+	      XEvent event = {0};
+	      while (global_want_to_run) {
+          uint x_offset = 0;
+          uint y_offset = 0;
           while (XPending(display) > 0) {
-	    XNextEvent(display, &event);
-	    switch (event.type) {
-	      case KeyPress: {
-		XKeyPressedEvent* ev = (XKeyPressedEvent *)&event;
-		if (ev->keycode == XKeysymToKeycode(display, XK_Left)) {
-	          puts("pressed left arrow");	
-		}
-	      } break;
-	      case ConfigureNotify: {
-                // might be able to stretch the bits instead of reallocating
-	        XConfigureEvent* ev = (XConfigureEvent *)&event;		    
-		// linux_resize_pixel_buf();
-		width = ev->width; 
-		height = ev->height;
-	      } break;
-	      case ClientMessage: {
+	          XNextEvent(display, &event);
+	          switch (event.type) {
+	            case ConfigureNotify: {
+	              XConfigureEvent* ev = (XConfigureEvent *)&event;		    
+	      	      linux_resize_or_create_pixel_buffer(&pixel_buffer, display, screen_info, ev->width, ev->height);
+	            } break;
+	            case ClientMessage: {
                 XClientMessageEvent* ev = (XClientMessageEvent *)&event;
-		if (ev->data.l[0] == WM_DELETE_WINDOW) {
-		  XDestroyWindow(display, window);
-		  window_is_opened = false;
-		}
-	      } break;
+	      	      if (ev->data.l[0] == WM_DELETE_WINDOW) {
+                  global_want_to_run = false;
+	      	        XDestroyWindow(display, window_id);
+                }
+	            } break;
               case DestroyNotify: {
-	        XDestroyNotifyEvent* ev = (XDestroyNotifyEvent *)&event;
-		if (ev->window == window) {
-		  // TODO(Ryan): Handle this as an error - recreate window?
-	          window_is_opened = false;	
-		}
-	      } break;
-	    } 
-	  }
+	              XDestroyWindowEvent* ev = (XDestroyWindowEvent *)&event;
+	      	      if (ev->window == window_id) {
+	                global_want_to_run = false;	
+	      	      }
+	            } break;
+	          } 
+	        }
 
-	// evdev for gamepads
-        int pitch = width * bytes_per_pixel; 	
-	for (int y = 0; y < height; ++y) {
-          byte* row = mem + y * pitch;
-	  for (int x = 0; x < width; ++x) {
-	    u32* pixel = (u32 *)(row + x * bytes_per_pixel);
-	    if (x % 16 && y % 16) {
-              *pixel = 0xffffffff;
-	    } else {
-              *pixel = 0;
-	    }
-	  }
-	}
+          hh_render_gradient(&pixel_buffer, x_offset, y_offset);
+	        linux_display_pixel_buffer_in_window(&pixel_buffer, display, window_id, screen_id);
 
-   render_grid(back_buffer);
-
-	 display_buffer_in_window();
-
-	}
-
+          ++x_offset;
+          y_offset += 2;
+        }
       } else {
-        // TODO(Ryan): Error Logging
+        // TODO(Ryan): Error Logging (window_id)
       }
 
     } else {
-      // TODO(Ryan): Error Logging
+      // TODO(Ryan): Error Logging (screen props)
     }
 
   } else {
-    // TODO(Ryan): Error Logging
+    // TODO(Ryan): Error Logging (display)
   }
 
   return 0;
