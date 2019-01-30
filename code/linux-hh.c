@@ -5,6 +5,13 @@
 
 #include <alsa/asoundlib.h>
 
+// NOTE(Ryan): Go off sdl2
+INTERNAL u32
+linux_joysticks(void)
+{
+
+}
+
 INTERNAL void
 alsa_audio(void)
 {
@@ -143,7 +150,7 @@ main(int argc, char* argv[argc + 1])
    
       XSetWindowAttributes window_attr = {0};
       window_attr.bit_gravity = StaticGravity;
-      window_attr.event_mask = StructureNotifyMask; 
+      window_attr.event_mask = StructureNotifyMask | KeyPressMask | KeyReleaseMask;
       window_attr.background_pixel = 0; 
       window_attr.colormap = XCreateColormap(
 		                                         display, 
@@ -185,6 +192,13 @@ main(int argc, char* argv[argc + 1])
           while (XPending(display) > 0) {
 	          XNextEvent(display, &event);
 	          switch (event.type) {
+              case KeyPress: {
+                XKeyPressedEvent* ev = (XKeyPressedEvent *)&event; 
+                if (ev->keycode == XKeysymToKeycode(display, XK_Left)) puts("left key was pressed");
+              } break;
+              case KeyRelease: {
+                 
+              } break;
 	            case ConfigureNotify: {
 	              XConfigureEvent* ev = (XConfigureEvent *)&event;		    
 	      	      linux_resize_or_create_pixel_buffer(&pixel_buffer, display, &visual_info, ev->width, ev->height);
