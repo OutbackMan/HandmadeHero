@@ -5,11 +5,12 @@
 GLOBAL bool global_want_to_run;
 
 // delegate is an object that responds to nswindow events
- 
+// this means the only methods it has are NSObject and essential NSWindowDelegate ones
 @interface WindowEventDelegate: NSObject<NSWindowDelegate>
 @end
 @implementation WindowEventDelegate
 
+// id is a pointer to any objective-c object
 - (void)windowWillClose: (id)sender {
   global_want_to_run = false;
 }
