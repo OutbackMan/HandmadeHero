@@ -6,7 +6,9 @@
 #include <alsa/asoundlib.h>
 
 #include <libudev.h>
-#include <linux/input.h> // for EV_ABS
+
+// these give capabilities of bit positions
+#include <linux/input.h> 
 #include <unistd.h>
 
 INTERNAL u32
@@ -44,15 +46,41 @@ linux_joysticks(void)
     unsigned long bitmask_abs[NBITS(ABS_MAX)];
     unsigned long bitmask_key[NBITS(KEY_MAX)];
 
+    test_bit(EV_ABS, bitmask_ev)
+
     // inside of sysfs (information about devices) there is a capabilites folder where
-    // they will hold numbers with bitmasks that can be queried to se what capabilities the device has
+    // they will hold numbers with bitmasks that can be queried to see what capabilities the device has
+    // these bitmasks are little-endian and are word space-separated (should be read right to left)
     get_caps(parent_dev, actual_dev, "capabilties/ev", bitmask_ev, ARRAY_SIZE(bitmask_ev));
+
     // ev, abs, key
     if (test_bit(EV_ABS, bitmask_ev) 
     
   }
 
   udev_enumerate_unref(enumerate);
+}
+
+INTERNAL void
+get_device_capabilites(struct udev_device* device, char const* capability, uint bitmask_len, unsigned long bitmask[bitmask_len])
+{
+  char* hex_capability_bitmask = udev_device_get_sysattr(device, capability);
+  char consumable_hex_capability_bitmask[4096]; 
+  strlcpy(consumable_hex_capability_bitmask, hex_capability_bitmask, sizeof(consumable_hex_capability_bitmask));
+  unsigned long int_hex_representation;
+  uint bitmask_word_index = 0;
+
+  // NOTE(Ryan): As little-endian, read from right to left
+  char* word = NULL;
+  while ((word = strrchr(consumable_hex_capability_bitmask, ' ')) != NULL) {
+    int_hex_representation = strtoul(word + 1, NULL, 16);
+    bitmask[bitmask_word_index] = int_hex_representation;
+    ++bitmask_word_index;
+    *word = NULL;
+  }
+
+  int_hex_representation = strtoul(word, NULL, 16);
+  bitmask[bitmask_word_index] = int_hex_representation;
 }
 
 INTERNAL void

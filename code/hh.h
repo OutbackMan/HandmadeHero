@@ -20,4 +20,16 @@ typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
 
+#define RAISE_ERROR_ON_ZERO(input) \
+  (0 * sizeof(struct { field: (2 * (input) - 1);}))
+
+#define IS_SAME_TYPE(var1, var2) \
+  __builtin_types_compatible_p(typeof(var1), typeof(var1))
+
+#define ARRAY_LENGTH(arr) \
+  (sizeof(arr)/sizeof(arr[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &arr[0])
+
+#define GET_BIT(val, bit_index) \
+  (val & (1 << bit_index))
+
 #endif
