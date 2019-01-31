@@ -6,6 +6,9 @@
 #include <alsa/asoundlib.h>
 
 #include <libudev.h>
+#include <linux/input.h> // for EV_ABS
+#include <unistd.h>
+
 INTERNAL u32
 linux_joysticks(void)
 {
@@ -14,8 +17,42 @@ linux_joysticks(void)
     // TODO(Ryan): unable to open udev   
   }
 
-  struct udev_enumerate* udev_enumerate = udev_enumerate_new(udev);
+  struct udev_monitor* monitor = udev_monitor_new_from_netlink(udev_handle, "udev");
+  udev_monitor_filter_add_match_subsystem_devtype(monitor, "input", NULL);
+  udev_monitor_enable_recieving(monitor);
+  int monitor_fd = udev_monitor_get_fd(monitor); 
 
+  struct udev_enumerate* enumerate = udev_enumerate_new(udev_handle);
+  udev_enumerate_add_match_subsystem(enumerate, "input");
+  udev_enumerate_scan_devices(enumerate);
+
+  struct udev_list_entry* devices = udev_enumerate_get_list_entry(enumerate); 
+  struct udev_list_entry* device = NULL;
+  udev_list_entry_foreach(device, devices) {
+    char const* device_sysfs_path = udev_list_entry_get_name(device);
+    struct udev_device* udev_device = udev_device_new_from_syspath(udev, device_sysfs_path);
+    
+    printf("devfs path: %s\n", udev_device_get_devnode(udev_device));
+    
+    while (!udev_device_get_sysattr_value(udev_device, "capabilites/ev")) {
+      udev_device_get_parent_with_subsystem_devtype(udev_device, "input", NULL); 
+    }
+
+    #define BITS_PER_LONG (sizeof(unsigned long) * 8)
+    #define NBITS(x) 
+    unsigned long bitmask_ev[NBITS(EV_MAX)];
+    unsigned long bitmask_abs[NBITS(ABS_MAX)];
+    unsigned long bitmask_key[NBITS(KEY_MAX)];
+
+    // inside of sysfs (information about devices) there is a capabilites folder where
+    // they will hold numbers with bitmasks that can be queried to se what capabilities the device has
+    get_caps(parent_dev, actual_dev, "capabilties/ev", bitmask_ev, ARRAY_SIZE(bitmask_ev));
+    // ev, abs, key
+    if (test_bit(EV_ABS, bitmask_ev) 
+    
+  }
+
+  udev_enumerate_unref(enumerate);
 }
 
 INTERNAL void
