@@ -40,25 +40,44 @@ linux_joysticks(void)
       udev_device_get_parent_with_subsystem_devtype(udev_device, "input", NULL); 
     }
 
-    #define BITS_PER_LONG (sizeof(unsigned long) * 8)
-    #define NBITS(x) 
-    unsigned long bitmask_ev[NBITS(EV_MAX)];
-    unsigned long bitmask_abs[NBITS(ABS_MAX)];
-    unsigned long bitmask_key[NBITS(KEY_MAX)];
+    word bitmask_ev[NUM_WORD_TO_REPR_NUM_BITS(EV_MAX)];
+    word bitmask_abs[NUM_WORD_TO_REPR_NUM_BITS(ABS_MAX)];
+    word bitmask_key[NUM_WORD_TO_REPR_NUM_BITS(KEY_MAX)];
 
-    test_bit(EV_ABS, bitmask_ev)
-
-    // inside of sysfs (information about devices) there is a capabilites folder where
-    // they will hold numbers with bitmasks that can be queried to see what capabilities the device has
-    // these bitmasks are little-endian and are word space-separated (should be read right to left)
-    get_caps(parent_dev, actual_dev, "capabilties/ev", bitmask_ev, ARRAY_SIZE(bitmask_ev));
+    get_device_capabilities(udev_device, "capabilties/ev", bitmask_ev, ARRAY_LENGTH(bitmask_ev));
+    get_device_capabilities(udev_device, "capabilties/abs", bitmask_abs, ARRAY_LENGTH(bitmask_abs));
+    get_device_capabilities(udev_device, "capabilties/key", bitmask_key, ARRAY_LENGTH(bitmask_key));
 
     // ev, abs, key
-    if (test_bit(EV_ABS, bitmask_ev) 
+    if (TEST_BIT_IN_WORD_ARRAY(EV_ABS, bitmask_ev) &&
+        TEST_BIT_IN_WORD_ARRAY(ABS_X, bitmask_abs) && TEST_BIT_IN_WORD_ARRAY(ABS_Y, bitmask_abs)) {
     
+      if (TEST_BIT_IN_WORD_ARRAY(BTN_TRIGGER, bitmask_key) &&
+          )
+
+    }
   }
 
   udev_enumerate_unref(enumerate);
+
+  while (true) {
+    fd_set fds;  
+
+    int ret = select(...);
+    if (ret > 0) {
+      struct udev_device* device = udev_monitor_recieve_device(udev_monitor); 
+      char const* action = udev_device_get_action(device);
+      if (strcmp(action, "add") == 0) {
+      
+      }
+      if (strcmp(action, "remove") == 0) {
+      
+      }
+    }
+  }
+
+  udev_device_get_property_value(dev, "ID_INPUT_JOYSTICK");
+
 }
 
 INTERNAL void
@@ -71,6 +90,9 @@ get_device_capabilites(struct udev_device* device, char const* capability, uint 
   uint bitmask_word_index = 0;
 
   // NOTE(Ryan): As little-endian, read from right to left
+  // inside of sysfs (information about devices) there is a capabilites folder where
+  // they will hold numbers with bitmasks that can be queried to see what capabilities the device has
+  // these bitmasks are little-endian and are word space-separated (should be read right to left)
   char* word = NULL;
   while ((word = strrchr(consumable_hex_capability_bitmask, ' ')) != NULL) {
     int_hex_representation = strtoul(word + 1, NULL, 16);

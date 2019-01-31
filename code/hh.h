@@ -19,6 +19,7 @@ typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
+typedef unsigned long word;
 
 #define RAISE_ERROR_ON_ZERO(input) \
   (0 * sizeof(struct { field: (2 * (input) - 1);}))
@@ -29,7 +30,19 @@ typedef int64_t int64;
 #define ARRAY_LENGTH(arr) \
   (sizeof(arr)/sizeof(arr[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &arr[0])
 
-#define GET_BIT(val, bit_index) \
-  (val & (1 << bit_index))
+#define BITS_PER_WORD (sizeof(word) * 8)
+
+// NOTE(Ryan): The '-1', '+1' is to account for integer truncation 
+#define NUM_WORD_TO_REPR_NUM_BITS(num_bits) \
+  ((num_bits - 1)/BITS_PER_WORD + 1)
+
+#define BIT_OFFSET_IN_WORD(bit_num) \
+  (bit_num % BITS_PER_WORD)
+
+#define BIT_NUM_TO_WORD_ARRAY_INDEX(bit_num) \
+  (bit_num / BITS_PER_WORD)
+
+#define CHECK_BIT_IN_WORD_ARRAY(arr, bit_num) \
+  ((arr[BIT_NUM_TO_WORD_ARRAY_INDEX(bit_num)] & (1UL << BIT_OFFSET_IN_WORD(bit_num))
 
 #endif
