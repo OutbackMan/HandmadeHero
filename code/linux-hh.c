@@ -5,10 +5,16 @@
 
 #include <alsa/asoundlib.h>
 
-// NOTE(Ryan): Go off sdl2
+#include <libudev.h>
 INTERNAL u32
 linux_joysticks(void)
 {
+  struct udev* udev_handle = udev_new();
+  if (udev_handle == NULL) {
+    // TODO(Ryan): unable to open udev   
+  }
+
+  struct udev_enumerate* udev_enumerate = udev_enumerate_new(udev);
 
 }
 

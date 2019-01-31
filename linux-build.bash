@@ -2,9 +2,8 @@
 #!/bin/bash
 
 # NOTE(Ryan): Requires libx11-dev on ubuntu (probably also want docs if developing)
-# Optional: libasound2-dev
-# possible also libxext-dev
-common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -lX11 -lasound"
+# libasound2-dev, libudev-dev
+common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -lX11 -lasound -ludev"
 
 debug_compiler_flags="-g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
 
