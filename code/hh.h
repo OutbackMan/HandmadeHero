@@ -45,4 +45,15 @@ typedef unsigned long word;
 #define CHECK_BIT_IN_WORD_ARRAY(arr, bit_num) \
   ((arr[BIT_NUM_TO_WORD_ARRAY_INDEX(bit_num)] & (1UL << BIT_OFFSET_IN_WORD(bit_num))
 
+
+typedef struct {
+  void* memory;
+  uint width;
+  uint height;
+  uint pitch;
+} HHPixelBuffer;
+
+void 
+hh_render_gradient(HHPixelBuffer* restrict pixel_buffer, uint green_offset, uint blue_offset);
+
 #endif

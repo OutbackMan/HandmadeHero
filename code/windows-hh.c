@@ -1,5 +1,7 @@
 #include "hh.h"
 
+#include "hh.c"
+
 #include <windows.h>
 #include <xinput.h>
 #include <dsound.h>
@@ -97,21 +99,6 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
   }
 }
 
-INTERNAL void
-hh_render_gradient(WindowsPixelBuffer* restrict pixel_buffer, uint green_offset, uint blue_offset)
-{
-  u8* row = (u8 *)pixel_buffer->memory;
-  for (uint y = 0; y < pixel_buffer->height; ++y) {
-    u32* pixel = (u32 *)row;
-    for (uint x = 0; x < pixel_buffer->width; ++x) {
-      u32 green_value = x + green_offset;
-      u32 blue_value = y + blue_offset;
-      *pixel++ = (green_value << 8 | blue_value); 
-    }
-    row += pixel_buffer->pitch;
-  }
-}
-
 GLOBAL bool global_want_to_run;
 GLOBAL WindowsPixelBuffer global_pixel_buffer;
 
@@ -175,6 +162,12 @@ int CALLBACK
 WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
   windows_create_pixel_buffer(&global_pixel_buffer, 1280, 720);
+  HHPixelBuffer pixel_buffer = {
+    .memory = global_pixel_buffer->memory,
+    .width = global_pixel_buffer->width,
+    .height = global_pixel_buffer->height,
+    .pitch = global_pixel_buffer->pitch
+  };
 
   WNDCLASS window_class = {0};
   window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -221,7 +214,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
           }
         }
 
-        hh_render_gradient(&global_pixel_buffer, x_offset, y_offset);
+        hh_render_gradient(&pixel_buffer, x_offset, y_offset);
 
         windows_display_pixel_buffer_in_window(&global_pixel_buffer, device_context, window_handle);
 

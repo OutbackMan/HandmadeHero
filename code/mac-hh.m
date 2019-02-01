@@ -1,11 +1,12 @@
 #include "hh.h"
+#include "hh.c"
 
 #include <AppKit/AppKit.h>
 
 GLOBAL bool global_want_to_run;
 
 // delegate is an object that responds to nswindow events
-// this means the only methods it has are NSObject and essential NSWindowDelegate ones
+// this means the only methods it has are NSObject and must implement NSWindowDelegate ones
 @interface WindowEventDelegate: NSObject<NSWindowDelegate>
 @end
 @implementation WindowEventDelegate
@@ -40,8 +41,8 @@ int main(int argc, char* argv[argc + 1])
                                                    NSWindowStyleMaskResizable 
                                           backing: NSBackingStoreBuffered 
                                           defer: NO ];
-  // [window setBackgroundColor: NSColor.redColor];
   [window setTitle: @"Handmade Hero"];
+  [window setBackgroundColor: NSColor.blackColor];
   // NOTE(Ryan): The key window is the window that currently recieves keyboard events, i.e. is in focus 
   [window makeKeyAndOrderFront: nil];
   [window setDelegate: window_event_delegate];
@@ -50,6 +51,7 @@ int main(int argc, char* argv[argc + 1])
   uint bitmap_width = 1280;
   uint bitmap_height = 720;
   uint bitmap_pitch = bitmap_width * 4;
+  // NOTE(Ryan): System allocator will determine whether to use mmap or other
   void* memory = malloc(bitmap_pitch * bitmap_height);
 
   // NOTE(Ryan): When resizing stuck in event loop
@@ -91,11 +93,15 @@ int main(int argc, char* argv[argc + 1])
                                    dequeue: YES];
       switch ([event type]) {
         default: {
-          [NSApp sendEvent: event];          
+          [NSApp sendEvent: event];
         } 
       }
     
     } while (event != nil);
+
+    hh_render_gradient();
+
+    mac_display_pixel_buffer_in_window(window);
   }
 
   return 0;
