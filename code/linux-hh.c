@@ -35,22 +35,31 @@ linux_joysticks(void)
     char const* device_sysfs_path = udev_list_entry_get_name(device);
     struct udev_device* udev_device = udev_device_new_from_syspath(udev, device_sysfs_path);
     
-    printf("devfs path: %s\n", udev_device_get_devnode(udev_device));
-    
     while (!udev_device_get_sysattr_value(udev_device, "capabilites/ev")) {
       udev_device_get_parent_with_subsystem_devtype(udev_device, "input", NULL); 
     }
 
-    udev_device_get_property_value(dev, "ID_INPUT_JOYSTICK");
+    char const* val = udev_device_get_property_value(dev, "ID_INPUT_JOYSTICK");
+    if (val != NULL && strcmp(val, "1") == 0) {
+      char const* devfs_path = udev_device_get_devnode(udev_device);
+      // add to global list of controllers
+    }
+
+      // this will be in event loop
   }
 
   udev_enumerate_unref(enumerate);
 
   while (true) {
     fd_set fds;  
+    FD_ZERO(&fds);
+    FD_SET(monitor_fd, &fds);
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
 
-    int ret = select(...);
-    if (ret > 0) {
+    int ret = select(monitor_fd + 1, &fds, NULL, NULL, &tv);
+    if (ret > 0 && FD_ISSET(monitor_fd, &fds)) {
       struct udev_device* device = udev_monitor_recieve_device(udev_monitor); 
       char const* action = udev_device_get_action(device);
       if (strcmp(action, "add") == 0) {
@@ -60,31 +69,40 @@ linux_joysticks(void)
       
       }
     }
+    // control the polling rate
+    usleep(250 * 1000);
   }
 }
 
+#if 0
 GLOBAL struct ff_effect global_force_feedback_effect = {0};
+force_feedback_effect.type = FF_RUMBLE;
+force_feedback_effect.u.rumble.strong_magnitude = 60000;
+force_feedback_effect.u.rumble.weak_magnitude = 0;
+force_feedback_effect.replay.length = 200;
+force_feedback_effect.replay.delay = 0;
+force_feedback_effect.id = -1;
+#endif
 
 INTERNAL void
 joystick_keys() 
 {
-  force_feedback_effect.type = FF_RUMBLE;
-  force_feedback_effect.u.rumble.strong_magnitude = 60000;
-  force_feedback_effect.u.rumble.weak_magnitude = 0;
-  force_feedback_effect.replay.length = 200;
-  force_feedback_effect.replay.delay = 0;
-  force_feedback_effect.id = -1;
 
   int fd = open("/dev/....", O_RDONLY);
 
   struct js_event event;
-  read(fd, &event, sizeof(event));
-
-  switch (event.type) {
-    case JS_EVENT_BUTTON:
-
+  while (read(fd, &event, sizeof(event)) > 0) {
+    switch (event.type) {
+      case JS_EVENT_BUTTON: {
+        if (event.number == JOYSTICK_BUTTON_A) {
+          puts("button a was pressed"); 
+        }                        
+      } break;
+      case JS_EVENT_AXIS: {
+                          
+      } break;
+    }
   }
-  // refer to linux_joystick.cpp
 }
 
 INTERNAL void
