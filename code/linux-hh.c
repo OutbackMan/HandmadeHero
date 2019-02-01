@@ -1,4 +1,5 @@
 #include "hh.h"
+#include "hh.c"
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -7,9 +8,9 @@
 
 #include <libudev.h>
 
-// these give capabilities of bit positions
-#include <linux/input.h> 
 #include <unistd.h>
+#include <linux/joystick.h>
+#include <fcntl.h>
 
 INTERNAL u32
 linux_joysticks(void)
@@ -40,22 +41,7 @@ linux_joysticks(void)
       udev_device_get_parent_with_subsystem_devtype(udev_device, "input", NULL); 
     }
 
-    word bitmask_ev[NUM_WORD_TO_REPR_NUM_BITS(EV_MAX)];
-    word bitmask_abs[NUM_WORD_TO_REPR_NUM_BITS(ABS_MAX)];
-    word bitmask_key[NUM_WORD_TO_REPR_NUM_BITS(KEY_MAX)];
-
-    get_device_capabilities(udev_device, "capabilties/ev", bitmask_ev, ARRAY_LENGTH(bitmask_ev));
-    get_device_capabilities(udev_device, "capabilties/abs", bitmask_abs, ARRAY_LENGTH(bitmask_abs));
-    get_device_capabilities(udev_device, "capabilties/key", bitmask_key, ARRAY_LENGTH(bitmask_key));
-
-    // ev, abs, key
-    if (TEST_BIT_IN_WORD_ARRAY(EV_ABS, bitmask_ev) &&
-        TEST_BIT_IN_WORD_ARRAY(ABS_X, bitmask_abs) && TEST_BIT_IN_WORD_ARRAY(ABS_Y, bitmask_abs)) {
-    
-      if (TEST_BIT_IN_WORD_ARRAY(BTN_TRIGGER, bitmask_key) &&
-          )
-
-    }
+    udev_device_get_property_value(dev, "ID_INPUT_JOYSTICK");
   }
 
   udev_enumerate_unref(enumerate);
@@ -75,34 +61,30 @@ linux_joysticks(void)
       }
     }
   }
-
-  udev_device_get_property_value(dev, "ID_INPUT_JOYSTICK");
-
 }
 
+GLOBAL struct ff_effect global_force_feedback_effect = {0};
+
 INTERNAL void
-get_device_capabilites(struct udev_device* device, char const* capability, uint bitmask_len, unsigned long bitmask[bitmask_len])
+joystick_keys() 
 {
-  char* hex_capability_bitmask = udev_device_get_sysattr(device, capability);
-  char consumable_hex_capability_bitmask[4096]; 
-  strlcpy(consumable_hex_capability_bitmask, hex_capability_bitmask, sizeof(consumable_hex_capability_bitmask));
-  unsigned long int_hex_representation;
-  uint bitmask_word_index = 0;
+  force_feedback_effect.type = FF_RUMBLE;
+  force_feedback_effect.u.rumble.strong_magnitude = 60000;
+  force_feedback_effect.u.rumble.weak_magnitude = 0;
+  force_feedback_effect.replay.length = 200;
+  force_feedback_effect.replay.delay = 0;
+  force_feedback_effect.id = -1;
 
-  // NOTE(Ryan): As little-endian, read from right to left
-  // inside of sysfs (information about devices) there is a capabilites folder where
-  // they will hold numbers with bitmasks that can be queried to see what capabilities the device has
-  // these bitmasks are little-endian and are word space-separated (should be read right to left)
-  char* word = NULL;
-  while ((word = strrchr(consumable_hex_capability_bitmask, ' ')) != NULL) {
-    int_hex_representation = strtoul(word + 1, NULL, 16);
-    bitmask[bitmask_word_index] = int_hex_representation;
-    ++bitmask_word_index;
-    *word = NULL;
+  int fd = open("/dev/....", O_RDONLY);
+
+  struct js_event event;
+  read(fd, &event, sizeof(event));
+
+  switch (event.type) {
+    case JS_EVENT_BUTTON:
+
   }
-
-  int_hex_representation = strtoul(word, NULL, 16);
-  bitmask[bitmask_word_index] = int_hex_representation;
+  // refer to linux_joystick.cpp
 }
 
 INTERNAL void
