@@ -1,9 +1,14 @@
 # sh is a POSIX specification for a scripting language. sh will be symlinked to an implementation (this may have more features)
 #!/bin/bash
 
+# header, segment, section (runtime)
+# vdso.so allows for certain syscalls to be executed in user space
+# wc --bytes, objdump -M intel -d; readelf --symbols, readelf --string-dump .comment <output>
+# machine word is width of register, however word in assembly is 16 bits
+
 # NOTE(Ryan): Requires libx11-dev on ubuntu (probably also want docs if developing)
 # libasound2-dev, libudev-dev
-common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -lX11 -lasound -ludev"
+common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -fuse-ld=lld -lX11 -lasound -ludev"
 
 debug_compiler_flags="-g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
 
