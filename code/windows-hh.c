@@ -67,15 +67,15 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
     wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  
     wave_format.cbSize = 0;
 
-    if (direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY) == DS_OK) { 
+    // NOTE(Ryan): As COM interface for C requires calling lpVtbl and passing original pointer to function 
+    if (direct_sound->lpVtbl->SetCooperativeLevel(direct_sound, window, DSSCL_PRIORITY) == DS_OK) { 
       DSBUFFERDESC buffer_description = {0};
       buffer_description.dwSize = sizeof(buffer_description);
       buffer_description.dwFlags = DSBCAPS_PRIMARYBUFFER;
 
- 
       LPDIRECTSOUNDBUFFER primary_buffer = NULL;
-      if (direct_sound->CreateSoundBuffer(&buffer_description, primary_buffer, NULL) == DS_OK) {
-        if (primary_buffer->SetFormat(&wave_format) != DS_OK) {
+      if (direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &buffer_description, &primary_buffer, NULL) == DS_OK) {
+        if (primary_buffer->lpVtbl->SetFormat(primary_buffer, &wave_format) != DS_OK) {
           // TODO(Ryan): primary buffer format set fail
         } 
       } else {
@@ -87,7 +87,7 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
       buffer_description.dwBufferBytes = buffer_size;
       buffer_description.lpwfxFormat = &wave_format;
       LPDIRECTSOUNDBUFFER secondary_buffer = NULL;
-      if (direct_sound->CreateSoundBuffer(&buffer_description, &secondary_buffer, 0) != DS_OK) {
+      if (direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &buffer_description, &secondary_buffer, 0) != DS_OK) {
         // TODO(Ryan): secondary buffer create fail 
       } 
     } else {

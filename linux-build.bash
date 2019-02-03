@@ -14,9 +14,10 @@
 
 # NOTE(Ryan): Requires libx11-dev on ubuntu (probably also want docs if developing)
 # libasound2-dev, libudev-dev
-# download llvm binary adding to /etc/paths
+# download llvm binary adding to /etc/profile
 common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -fuse-ld=lld -lX11 -lasound -ludev"
 
+# ensure llvm-symbolizer on $PATH 
 debug_compiler_flags="-g -fno-omit-frame-pointer -fsanitize=address -fno-optimize-sibling-calls"
 
 release_compiler_flags="-Ofast"
