@@ -12,11 +12,10 @@
 # we would have to write syscalls manually.
 # On windows, is just crt so can do without it
 
-# NOTE(Ryan): Requires libx11-dev on ubuntu (probably also want docs if developing)
-# libasound2-dev, libudev-dev
 # download llvm binary adding to /etc/profile
 common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -fuse-ld=lld -lX11 -lasound -ludev"
 
+# libx11-dev libasound2-dev libudev-dev
 # ensure llvm-symbolizer on $PATH 
 debug_compiler_flags="-g -fno-omit-frame-pointer -fsanitize=address -fno-optimize-sibling-calls"
 
