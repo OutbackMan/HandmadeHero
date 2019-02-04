@@ -68,11 +68,15 @@ linux_joysticks(void)
       if (strcmp(action, "remove") == 0) {
       
       }
+      // button_down/up, axis ??
     }
     // control the polling rate
     usleep(250 * 1000);
   }
 }
+
+// buttonDownFunc/UpFunc(), axisMoveFunc()
+// processEvents() every frame
 
 #if 0
 GLOBAL struct ff_effect global_force_feedback_effect = {0};

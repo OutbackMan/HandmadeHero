@@ -5,6 +5,11 @@
 # vdso.so allows for certain syscalls to be executed in user space
 # wc --bytes, objdump -M intel -d; readelf --symbols, readelf --string-dump .comment <output>
 # machine word is width of register, however word in assembly is 16 bits
+# rbp params, rsp local
+
+# NOTE(Ryan): On linux, libc doesn't just provide crt functions it also wraps syscalls pertaining to POSIX. Without it,
+# we would have to write syscalls manually.
+# On windows, is just crt so can do without it
 
 # NOTE(Ryan): Requires libx11-dev on ubuntu (probably also want docs if developing)
 # libasound2-dev, libudev-dev
