@@ -12,6 +12,7 @@
 #include <linux/joystick.h>
 #include <fcntl.h>
 
+#if 0
 INTERNAL u32
 linux_joysticks(void)
 {
@@ -145,6 +146,7 @@ __ALSA_INIT_ERROR__:
     snd_pcm_hw_params_free(hw_params);
   }
 }
+#endif
 
 // dpkg internally installs .deb packages, while apt handles dependency management
 // ubuntu releases more features than debian which is more stable (suitable for servers)
@@ -204,21 +206,6 @@ linux_display_pixel_buffer_in_window(LinuxPixelBuffer* restrict pixel_buffer, Di
 	         );
 }
 
-INTERNAL void
-hh_render_gradient(LinuxPixelBuffer* restrict pixel_buffer, uint green_offset, uint blue_offset)
-{
-  u8* row = (u8 *)pixel_buffer->memory; 
-  for (uint y = 0; y < pixel_buffer->height; ++y) {
-    u32* pixel = (u32 *)row; 
-    for (uint x = 0; x < pixel_buffer->width; ++x) {
-      u32 green = x + green_offset; 
-      u32 blue = y + blue_offset; 
-      *pixel++ = (green << 8 | blue << 16);
-    }
-    row += pixel_buffer->pitch;
-  }
-}
-
 GLOBAL bool global_want_to_run;
 
 int 
@@ -241,8 +228,15 @@ main(int argc, char* argv[argc + 1])
 					                                               ); 
     if (screen_has_desired_properties) {
       // NOTE(Ryan): C does not support assignment of values to struct, rather initialisation
-      LinuxPixelBuffer pixel_buffer = {0}; 
-      linux_resize_or_create_pixel_buffer(&pixel_buffer, display, &visual_info, 1280, 720);
+      LinuxPixelBuffer linux_pixel_buffer = {0}; 
+      linux_resize_or_create_pixel_buffer(&linux_pixel_buffer, display, &visual_info, 1280, 720);
+
+      HHPixelBuffer hh_pixel_buffer = {
+         .memory = linux_pixel_buffer.memory,
+         .width = linux_pixel_buffer.width,
+         .height = linux_pixel_buffer.height,
+         .pitch = linux_pixel_buffer.pitch
+      };
    
       XSetWindowAttributes window_attr = {0};
       window_attr.bit_gravity = StaticGravity;
@@ -297,7 +291,7 @@ main(int argc, char* argv[argc + 1])
               } break;
 	            case ConfigureNotify: {
 	              XConfigureEvent* ev = (XConfigureEvent *)&event;		    
-	      	      linux_resize_or_create_pixel_buffer(&pixel_buffer, display, &visual_info, ev->width, ev->height);
+	      	      linux_resize_or_create_pixel_buffer(&linux_pixel_buffer, display, &visual_info, ev->width, ev->height);
 	            } break;
 	            case ClientMessage: {
                 XClientMessageEvent* ev = (XClientMessageEvent *)&event;
@@ -315,8 +309,9 @@ main(int argc, char* argv[argc + 1])
 	          } 
 	        }
 
-          hh_render_gradient(&pixel_buffer, x_offset, y_offset);
-	        linux_display_pixel_buffer_in_window(&pixel_buffer, display, window, screen);
+          hh_render_gradient(&hh_pixel_buffer, x_offset, y_offset);
+
+	        linux_display_pixel_buffer_in_window(&linux_pixel_buffer, display, window, screen);
 
           ++x_offset;
           y_offset += 2;
