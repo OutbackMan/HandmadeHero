@@ -198,6 +198,11 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
       uint x_offset = 0;
       uint y_offset = 0;
       HDC device_context = GetDC(window_handle);
+
+      windows_init_dsound();
+      // NOTE(Ryan): Don't require high priority as we are not mixing sounds
+      global_secondary_buffer->lpVtbl->Play(global_secondary_buffer, 0, 0, DSBPLAY_LOOPING);
+
       global_want_to_run = true;
       while (global_want_to_run) {
         MSG message;
@@ -219,6 +224,41 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
         }
 
         hh_render_gradient(&pixel_buffer, x_offset, y_offset);
+
+        // NOTE(Ryan): As audio is running asynchronously, we use the write cursor 
+        // which is ahead of the play cursor
+        u32 play_cursor;
+        u32 write_cursor;
+        global_secondary_buffer->lpVtbl->GetCurrentPosition(global_secondary_buffer, &player_cursor, &write_cursor);
+        
+        u32 write_pointer;
+        u32 num_bytes_to_lock;
+        void* region_1;
+        u32 region_1_size;
+        void* region_2;
+        u32 region_2_size;
+        global_secondary_buffer->lpVtbl->Lock(
+                                              global_secondary_buffer,
+                                              write_pointer,
+                                              bytes_to_write,
+                                              &region_1, &region_1_size,
+                                              &region_2, &region_2_size,
+                                              0
+                                             );
+        u16* sample = (u16 *)region_1;
+        u32 region_1_sample_count = region_1_size / 4;
+        for (u32 complete_sample_index = 0; complete_sample_index < region_1_sample_count; ++complete_sample_index) {
+          *sample++ = 16000; 
+          *sample++ = 16000; 
+        }
+        sample = (u16 *)region_2;
+        u32 region_2_sample_count = region_2_size / 4;
+        for (u32 complete_sample_index = 0; complete_sample_index < region_1_sample_count; ++complete_sample_index) {
+          *sample++ = 16000; 
+          *sample++ = 16000; 
+        }
+
+        global_secondary_buffer->lpVtbl->Unlock(global_secondary_buffer, region_1, region_1_size, region_2, region_2_size);
 
         windows_display_pixel_buffer_in_window(&global_pixel_buffer, device_context, window_handle);
 
