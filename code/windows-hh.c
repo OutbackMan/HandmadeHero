@@ -1,5 +1,4 @@
 #include "hh.h"
-
 #include "hh.c"
 
 #include <windows.h>
@@ -59,7 +58,7 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
 {
   LPDIRECTSOUND direct_sound = NULL;
   if (DirectSoundCreate(NULL, &direct_sound, NULL) == DS_OK) {
-    WAVEFORMATX wave_format = {0};
+    WAVEFORMATEX wave_format = {0};
     wave_format.wFormatTag = WAVE_FORMAT_PCM;
     wave_format.nChannels = 2;
     wave_format.nSamplesPerSec = samples_per_second;
@@ -82,11 +81,11 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
       } else {
         // TODO(Ryan): primary buffer create fail
       }
-      DSBUFFERDESC buffer_description = {0};  
+      memset(&buffer_description, 0, sizeof(buffer_description));
       buffer_description.dwSize = sizeof(buffer_description);
       buffer_description.dwFlags = 0;
       buffer_description.dwBufferBytes = buffer_size;
-      buffer_description.lpwdfxFormat = &wave_format;
+      buffer_description.lpwfxFormat = &wave_format;
       LPDIRECTSOUNDBUFFER secondary_buffer = NULL;
       if (direct_sound->CreateSoundBuffer(&buffer_description, &secondary_buffer, 0) != DS_OK) {
         // TODO(Ryan): secondary buffer create fail 
@@ -163,10 +162,10 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
 {
   windows_create_pixel_buffer(&global_pixel_buffer, 1280, 720);
   HHPixelBuffer pixel_buffer = {
-    .memory = global_pixel_buffer->memory,
-    .width = global_pixel_buffer->width,
-    .height = global_pixel_buffer->height,
-    .pitch = global_pixel_buffer->pitch
+    .memory = global_pixel_buffer.memory,
+    .width = global_pixel_buffer.width,
+    .height = global_pixel_buffer.height,
+    .pitch = global_pixel_buffer.pitch
   };
 
   WNDCLASS window_class = {0};
