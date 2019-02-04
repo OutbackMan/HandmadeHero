@@ -1,6 +1,8 @@
 #!/bin/bash
 
-common_compiler_flags="-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -framework AppKit"
+# Download xcode command line tools and llvm binary adding to /etc/profile
+# Use otool -L <file>
+common_compiler_flags="-fuse-ld=lld -Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow -framework AppKit"
 
 debug_compiler_flags="-g -fno-omit-frame-pointer -fno-optimize-sibling-calls"
 
