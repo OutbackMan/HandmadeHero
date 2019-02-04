@@ -29,7 +29,7 @@ typedef int64_t int64;
 #define ARRAY_LENGTH(arr) \
   (sizeof(arr)/sizeof(arr[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &arr[0]))
 
-#define TEST_BIT(bitmask, bit) \
+#define IS_BIT_SET(bitmask, bit) \
   (bitmask & (1 << bit))
 
 typedef struct {

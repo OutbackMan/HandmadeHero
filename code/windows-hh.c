@@ -59,15 +59,20 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
   LPDIRECTSOUND direct_sound = NULL;
   if (DirectSoundCreate(NULL, &direct_sound, NULL) == DS_OK) {
     WAVEFORMATEX wave_format = {0};
+    // NOTE(Ryan): PCM is PAM implementation for computers
     wave_format.wFormatTag = WAVE_FORMAT_PCM;
     wave_format.nChannels = 2;
     wave_format.nSamplesPerSec = samples_per_second;
-    wave_format.wBitsPerSample = 16;
+    // NOTE(Ryan): May not need 16, only 8
+    // As 2 channel, complete sample is 32bits
+    wave_format.wBitsPerSample = 16; 
     wave_format.nBlockAlign = (wave_format.nChannels * wave_format.wBitsPerSample) / 8;
     wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  
     wave_format.cbSize = 0;
 
-    // NOTE(Ryan): As COM interface for C requires calling lpVtbl and passing original pointer to function 
+    // 20Hz <--> 20000Hz (neiquist want sampling rate double of audible, i.e. 40000Hz, additional due to anti-aliasing) 
+    // NOTE(Ryan): COM interface utilises virtual function in C++. 
+    // As no implicit vtable in C, manually specify lpVtbl and pass original pointer to function
     if (direct_sound->lpVtbl->SetCooperativeLevel(direct_sound, window, DSSCL_PRIORITY) == DS_OK) { 
       DSBUFFERDESC buffer_description = {0};
       buffer_description.dwSize = sizeof(buffer_description);
@@ -86,8 +91,7 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
       buffer_description.dwFlags = 0;
       buffer_description.dwBufferBytes = buffer_size;
       buffer_description.lpwfxFormat = &wave_format;
-      LPDIRECTSOUNDBUFFER secondary_buffer = NULL;
-      if (direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &buffer_description, &secondary_buffer, 0) != DS_OK) {
+      if (direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &buffer_description, &global_secondary_buffer, 0) != DS_OK) {
         // TODO(Ryan): secondary buffer create fail 
       } 
     } else {
@@ -100,6 +104,7 @@ windows_init_dsound(HWND window, int32 samples_per_second, int32 buffer_size)
 
 GLOBAL bool global_want_to_run;
 GLOBAL WindowsPixelBuffer global_pixel_buffer;
+GLOBAL LPDIRECTSOUNDBUFFER global_secondary_buffer;
 
 LRESULT CALLBACK
 main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -136,7 +141,7 @@ main_window_callback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
       }
 
       // NOTE(Ryan): Responding to SYSKEY means we have to reimplement alt-f4
-      bool alt_key_was_down = ((lparam & (1 << 29)) != 0);
+      bool alt_key_was_down = !IS_BIT_SET(lparam, 29);
       if (vk_code == VK_F4 && alt_key_was_down) {
         global_want_to_run = false; 
       }
