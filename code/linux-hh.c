@@ -172,7 +172,6 @@ linux_resize_or_create_pixel_buffer(LinuxPixelBuffer* restrict pixel_buffer, Dis
   uint bytes_per_pixel = 4; 
   uint pixel_buffer_size = pixel_buffer->width * bytes_per_pixel * pixel_buffer->height;
 
-  // NOTE(Ryan): Issue with using mmap() here
   pixel_buffer->memory = malloc(pixel_buffer_size);
 
   pixel_buffer->pitch = pixel_buffer->width * bytes_per_pixel;

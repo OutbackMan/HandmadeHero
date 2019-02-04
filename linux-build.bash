@@ -2,10 +2,11 @@
 #!/bin/bash
 
 # header, segment, section (runtime)
-# vdso.so allows for certain syscalls to be executed in user space
 # wc --bytes, objdump -M intel -d; readelf --symbols, readelf --string-dump .comment <output>
 # machine word is width of register, however word in assembly is 16 bits
 # rbp params, rsp local
+# --> vdso.so allows for certain syscalls to be executed in user space
+# --> libm.so, librt.so are filter libraries to libc (legacy)
 
 # NOTE(Ryan): On linux, libc doesn't just provide crt functions it also wraps syscalls pertaining to POSIX. Without it,
 # we would have to write syscalls manually.
