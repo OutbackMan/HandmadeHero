@@ -33,14 +33,36 @@ typedef int64_t int64;
   (bitmask & (1 << bit))
 
 typedef struct {
-  // These pixels are arranged BB GG RR AA
+  // NOTE(Ryan): These pixels are arranged BB GG RR AA
   void* memory;
   uint width;
   uint height;
   uint pitch;
 } HHPixelBuffer;
 
+typedef struct {
+  uint num_times_up_down;
+  bool was_down;
+} HHBtnState;
+
+// 42:44
+typedef struct {
+  bool is_connected;
+  bool is_analog;
+
+  HHBtnState up_btn;
+} HHGameController;
+
+typedef struct {
+  HHGameController controllers[4];
+} HHInput;
+
 void 
-hh_render_gradient(HHPixelBuffer* restrict pixel_buffer, uint green_offset, uint blue_offset);
+hh_render_gradient(
+                   HHPixelBuffer* restrict pixel_buffer, 
+                   uint green_offset, 
+                   uint blue_offset
+                  );
+
 
 #endif

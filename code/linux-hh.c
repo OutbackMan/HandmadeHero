@@ -9,10 +9,33 @@
 #include <libudev.h>
 
 #include <unistd.h>
-#include <linux/joystick.h>
 #include <fcntl.h>
 
-#if 0
+#include <linux/input.h>
+
+/* SDL_sysjoystick
+ * action buttons --> BTN_NORTH/EAST/SOUTH/WEST
+ * dpad --> BTN_DPAD_UP/RIGHT/DOWN/LEFT
+ * left analog --> ABS_X, ABS_Y, BTN_THUMBL 
+ * right analog --> ABS_RX, ABS_RY, BTN_THUMBR
+ * top left trigger --> BTN_TL 
+ * top right trigger --> BTN_TR
+ * bottom left trigger --> ABS_HAT2Y
+ * bottom right trigger --> ABS_HAT2X
+ * BTN_SELECT/BTN_MODE/BTN_START
+ *
+ */
+struct input_event event; 
+
+switch (event_type) {
+  case EV_KEY: {
+    // for buttons       
+  } break;
+  case EV_ABS: {
+    // analog
+  } break;
+}
+
 INTERNAL u32
 linux_joysticks(void)
 {
@@ -69,17 +92,12 @@ linux_joysticks(void)
       if (strcmp(action, "remove") == 0) {
       
       }
-      // button_down/up, axis ??
     }
-    // control the polling rate
+    // control the polling rate ??
     usleep(250 * 1000);
   }
 }
 
-// buttonDownFunc/UpFunc(), axisMoveFunc()
-// processEvents() every frame
-
-#if 0
 GLOBAL struct ff_effect global_force_feedback_effect = {0};
 force_feedback_effect.type = FF_RUMBLE;
 force_feedback_effect.u.rumble.strong_magnitude = 60000;
@@ -87,28 +105,6 @@ force_feedback_effect.u.rumble.weak_magnitude = 0;
 force_feedback_effect.replay.length = 200;
 force_feedback_effect.replay.delay = 0;
 force_feedback_effect.id = -1;
-#endif
-
-INTERNAL void
-joystick_keys() 
-{
-
-  int fd = open("/dev/....", O_RDONLY);
-
-  struct js_event event;
-  while (read(fd, &event, sizeof(event)) > 0) {
-    switch (event.type) {
-      case JS_EVENT_BUTTON: {
-        if (event.number == JOYSTICK_BUTTON_A) {
-          puts("button a was pressed"); 
-        }                        
-      } break;
-      case JS_EVENT_AXIS: {
-                          
-      } break;
-    }
-  }
-}
 
 INTERNAL void
 alsa_audio(void)
@@ -146,7 +142,6 @@ __ALSA_INIT_ERROR__:
     snd_pcm_hw_params_free(hw_params);
   }
 }
-#endif
 
 // dpkg internally installs .deb packages, while apt handles dependency management
 // ubuntu releases more features than debian which is more stable (suitable for servers)
