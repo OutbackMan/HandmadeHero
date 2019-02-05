@@ -54,7 +54,7 @@ int main(int argc, char* argv[argc + 1])
   // NOTE(Ryan): System allocator will determine whether to use mmap or other
   void* memory = malloc(bitmap_pitch * bitmap_height);
 
-  // NOTE(Ryan): When resizing stuck in event loop
+  // NOTE(Ryan): Change to core graphics
   NSBitmapImageRep* image_rep = [[NSBitmapImageRep alloc]
                                     initWithBitmapDataPlanes: &memory
                                                   pixelsWide: bitmap_width
