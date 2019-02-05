@@ -29,6 +29,10 @@ typedef int64_t int64;
 #define ARRAY_LENGTH(arr) \
   (sizeof(arr)/sizeof(arr[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &arr[0]))
 
+#define SWAP(var1, var2) \
+  ({typeof(var1) temp = var1; var1 = var2; var2 = temp;}) \
+    + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
+
 #define IS_BIT_SET(bitmask, bit) \
   (bitmask & (1 << bit))
 
@@ -40,12 +44,12 @@ typedef struct {
   uint pitch;
 } HHPixelBuffer;
 
+// NOTE(Ryan): This refer to what the button was at the end of a frame
 typedef struct {
   uint num_times_up_down;
-  bool was_down;
+  bool ended_down;
 } HHBtnState;
 
-// 42:44
 typedef struct {
   bool is_connected;
   bool is_analog;
