@@ -24,17 +24,25 @@ typedef int64_t int64;
   (0 * sizeof(struct { field: (2 * (input) - 1);}))
 
 #define IS_SAME_TYPE(var1, var2) \
-  __builtin_types_compatible_p(typeof(var1), typeof(var1))
+  (__builtin_types_compatible_p(typeof(var1), typeof(var1)))
 
 #define ARRAY_LENGTH(arr) \
-  (sizeof(arr)/sizeof(arr[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &arr[0]))
+  (sizeof(arr)/sizeof((arr)[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &(arr)[0]))
 
 #define SWAP(var1, var2) \
   ({typeof(var1) temp = var1; var1 = var2; var2 = temp;}) \
     + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
 
+#define MIN(var1, var2) \
+  ((var1) < (var2) ? (var1) : (var2)) \
+    + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
+
+#define MAX(var1, var2) \
+  ((var1) > (var2) ? (var1) : (var2)) \
+    + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
+
 #define IS_BIT_SET(bitmask, bit) \
-  (bitmask & (1 << bit))
+  ((bitmask) & (1 << (bit)))
 
 typedef struct {
   // NOTE(Ryan): These pixels are arranged BB GG RR AA
@@ -44,7 +52,7 @@ typedef struct {
   uint pitch;
 } HHPixelBuffer;
 
-// NOTE(Ryan): This refer to what the button was at the end of a frame
+// NOTE(Ryan): This gives us the opportunity to handle increased polling
 typedef struct {
   uint num_times_up_down;
   bool ended_down;
@@ -54,11 +62,17 @@ typedef struct {
   bool is_connected;
   bool is_analog;
 
-  HHBtnState up_btn;
+  union {
+    HHBtnState buttons[6];
+    struct {
+      HHBtnState up_btn;
+    };
+  };
 } HHGameController;
 
 typedef struct {
   HHGameController controllers[4];
+
 } HHInput;
 
 void 
@@ -67,6 +81,5 @@ hh_render_gradient(
                    uint green_offset, 
                    uint blue_offset
                   );
-
 
 #endif

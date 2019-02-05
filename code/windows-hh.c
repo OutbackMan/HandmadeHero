@@ -203,6 +203,10 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
       // NOTE(Ryan): Don't require high priority as we are not mixing sounds
       global_secondary_buffer->lpVtbl->Play(global_secondary_buffer, 0, 0, DSBPLAY_LOOPING);
 
+      HHInput input[2];
+      HHInput* cur_input = &input[0];
+      HHInput* prev_input = &input[1];
+
       global_want_to_run = true;
       while (global_want_to_run) {
         MSG message;
@@ -214,7 +218,7 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
           DispatchMessageA(&message);
         }
 
-        for (uint controller_index = 0; controller_index < XUSER_MAX_COUNT; ++controller_index) {
+        for (uint controller_i = 0; controller_i < ARRAY_SIZE(cur_input->controllers); ++controller_i) {
           XINPUT_STATE controller_state = {0};
           if (XInputGetState(controller_index, &controller_state) == ERROR_SUCCESS) {
             bool up = controller_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP;
@@ -261,6 +265,8 @@ WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_sho
         global_secondary_buffer->lpVtbl->Unlock(global_secondary_buffer, region_1, region_1_size, region_2, region_2_size);
 
         windows_display_pixel_buffer_in_window(&global_pixel_buffer, device_context, window_handle);
+
+        SWAP(cur_input, prev_input);
 
         ++x_offset;
         y_offset += 2;
