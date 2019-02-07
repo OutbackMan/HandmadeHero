@@ -3,6 +3,8 @@
 !.gitattributes
 !.gitignore
 
+!README.md
+
 !linux-build.bash
 !windows-build.bat
 !mac-build.bash
