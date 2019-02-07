@@ -1,12 +1,10 @@
 @ECHO OFF
 
-REM jre+cdt(rename zip before extraction due to long java naming conventions), vs c++ build tools + win10 sdk, llvm, gdb (mingw-64 sourceforge builds)
-
 REM NOTE(Ryan): Unable to use clang + lld + mingw due to bug documented here: https://bugs.llvm.org/show_bug.cgi?id=38939  
-REM Therefore, resort to using slower ld from binutils.
+REM             Therefore, resort to using slower ld from mingw binutils for the time being
 
 SET common_compiler_flags=-Wall -Wextra -Wpedantic -Wfloat-equal -Wunreachable-code -Wshadow^
- -luser32 -lgdi32 -lxinput -ldsound
+ -target x86_64-windows-gnu -luser32 -lgdi32 -lxinput -ldsound
 
 SET debug_compiler_flags=-fno-omit-frame-pointer -fno-optimize-sibling-calls -g
 
