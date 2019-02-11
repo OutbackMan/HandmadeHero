@@ -3,6 +3,21 @@
 
 #include <AppKit/AppKit.h>
 
+void hid_devices()
+{
+  // NOTE(Ryan): CF for core foundation framework
+  // 'k' is hungarian notation for constant
+  IOHIDManagerRef hid_manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
+
+  // NOTE(Ryan): Use these to filter out listed HID devices
+  CFString hid_filter_keys[2];
+  hid_filter_keys[0] = CFSTR(kIOHDDeviceUsagePageKey);
+  hid_filter_keys[1] = CFSTR(kIOHDDeviceUsageKey);
+
+  // NOTE(Ryan): constants to identify devices
+  CFDictionaryRef dictionaries[3];
+}
+
 GLOBAL bool global_want_to_run;
 
 // delegate is an object that responds to nswindow events

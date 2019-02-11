@@ -20,18 +20,16 @@ typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
 
-#define RAISE_ERROR_ON_ZERO(input) \
-  (0 * sizeof(struct { field: (2 * (input) - 1);}))
-
 #define IS_SAME_TYPE(var1, var2) \
   (__builtin_types_compatible_p(typeof(var1), typeof(var1)))
 
 #define ARRAY_LENGTH(arr) \
-  (sizeof(arr)/sizeof((arr)[0])) + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(arr, &(arr)[0]))
+  (sizeof(arr)/sizeof((arr)[0])) + \
+    (!IS_SAME_TYPE(arr, &(arr)[0])) ? (_Pragma("GCC Error \"ARRAY_LENGTH macro did not recieve expected array input\"")) : 0
 
 #define SWAP(var1, var2) \
-  ({typeof(var1) temp = var1; var1 = var2; var2 = temp;}) \
-    + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
+  ({typeof(var1) temp = var1; var1 = var2; var2 = temp;}) + \
+    (!IS_SAME_TYPE(var1, var2)) ? (_Pragma("GCC Error \"SWAP macro did not recieve inputs of same type\"")) : 0
 
 #define MIN(var1, var2) \
   ((var1) < (var2) ? (var1) : (var2)) \

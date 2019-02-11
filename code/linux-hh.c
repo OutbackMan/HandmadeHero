@@ -13,6 +13,10 @@
 
 #include <linux/input.h>
 
+/*
+ * -DCMAKE_BUILD_TYPE=Debug -DSDL_TEST=ON
+ */
+
 /* SDL_sysjoystick
  * action buttons --> BTN_NORTH/EAST/SOUTH/WEST
  * dpad --> BTN_DPAD_UP/RIGHT/DOWN/LEFT
@@ -23,7 +27,6 @@
  * bottom left trigger --> ABS_HAT2Y
  * bottom right trigger --> ABS_HAT2X
  * BTN_SELECT/BTN_MODE/BTN_START
- *
  */
 struct input_event event; 
 
