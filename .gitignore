@@ -5,12 +5,11 @@
 
 !README.md
 
-!linux-build.bash
+!unix-build.bash
 !windows-build.bat
-!mac-build.bash
 
 !*/
-!/code/**/*.[chm]
+!/code/**/*.[ch]
 !/misc/**/*.gvimrc
 !/misc/**/*.bash
 !/misc/**/*.bat

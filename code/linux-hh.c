@@ -17,6 +17,18 @@
  * -DCMAKE_BUILD_TYPE=Debug -DSDL_TEST=ON
  */
 
+
+void software_renderer(void)
+{
+  SDL_VideoInit(NULL);
+  XGCValues gcv;
+}
+
+void destroy(void)
+{
+  XDestroyImage();
+}
+
 /* SDL_sysjoystick
  * action buttons --> BTN_NORTH/EAST/SOUTH/WEST
  * dpad --> BTN_DPAD_UP/RIGHT/DOWN/LEFT
