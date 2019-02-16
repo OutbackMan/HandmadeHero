@@ -81,3 +81,28 @@ hh_render_gradient(
                   );
 
 #endif
+
+glMatrixMode(GL_MODELVIEW);
+// NOTE(Ryan): Identity matrix is a diagonal row of 1's. Effectively a NOP
+glLoadIdentity();
+
+glBegin(GL_TRIANGLES);
+
+// NOTE(Ryan): Using fixed function pipeline as opposed to shaders, so implicit vertex transformations occuring that don't put triangles where we want them
+// NOTE(Ryan): An affine transformation is a linear transformation with displacement (not just scaling and skewing)
+glVertex2i(0, 0);
+glVertex2i(window_width, 0);
+glVertex2i(window_width, window_height);
+
+glVertex2i(0, 0);
+glVertex2i(0, window_height);
+glVertex2i(window_width, window_height);
+glEnd();
+
+
+
+
+
+
+
+
