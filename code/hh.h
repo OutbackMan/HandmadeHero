@@ -81,9 +81,12 @@ hh_render_gradient(
                   );
 
 #endif
+// After transformation, returns point in unit cube space (-1, 1)
 
 glMatrixMode(GL_MODELVIEW);
 // NOTE(Ryan): Identity matrix is a diagonal row of 1's. Effectively a NOP
+glLoadIdentity();
+glMatrixMode(GL_PROJECTION);
 glLoadIdentity();
 
 glBegin(GL_TRIANGLES);
