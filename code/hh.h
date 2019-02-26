@@ -81,26 +81,185 @@ hh_render_gradient(
                   );
 
 #endif
-// After transformation, returns point in unit cube space (-1, 1)
 
-glMatrixMode(GL_MODELVIEW);
-// NOTE(Ryan): Identity matrix is a diagonal row of 1's. Effectively a NOP
-glLoadIdentity();
-glMatrixMode(GL_PROJECTION);
-glLoadIdentity();
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+#include <GL/gl.h>
 
-glBegin(GL_TRIANGLES);
+#include "hh.h"
+#include "hh.c"
 
-// NOTE(Ryan): Using fixed function pipeline as opposed to shaders, so implicit vertex transformations occuring that don't put triangles where we want them
-// NOTE(Ryan): An affine transformation is a linear transformation with displacement (not just scaling and skewing)
-glVertex2i(0, 0);
-glVertex2i(window_width, 0);
-glVertex2i(window_width, window_height);
+GLOBAL bool global_want_to_run;
 
-glVertex2i(0, 0);
-glVertex2i(0, window_height);
-glVertex2i(window_width, window_height);
-glEnd();
+#define MAX_CONTROLLERS 4
+typedef struct {
+  int32 joystick_id;
+  SDL_GameController* controller;
+  SDL_Haptic* haptic;
+} SDLGameController;
+
+GLOBAL SDLGameController controllers[MAX_CONTROLLERS];
+GLOBAL uint num_controllers_connected = 0;
+
+INTERNAL void
+sdl_load_currently_connected_game_controllers(void)
+{
+  uint num_joysticks = SDL_NumJoysticks(); 
+  for (uint joystick_i = 0; joystick_i < num_joysticks; ++joystick_i) {
+    if (!SDL_IsGameController(joystick_i)) {
+      continue; 
+    }
+    if (num_controllers_connected >= MAX_CONTROLLERS) {
+      break; 
+    }
+
+    controllers[num_controllers_connected]->controller = SDL_GameControllerOpen(joystick_i);
+    SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controllers[num_controllers_connected]->controller);
+    controllers[num_controllers_connected]->haptic = SDL_HapticOpenFromJoystick(joystick);
+    if (SDL_HapticRumbleInit(controllers[num_controllers_connected]->haptic) < 0) {
+      SDL_HapticClose(controllers[num_controllers_connected]->haptic);
+    }
+      
+    controllers[num_controllers_connected]->joystick_id = joystick_i;
+
+    ++num_controllers_connected;
+  }
+}
+
+
+CONTROLLER_ADDED: {
+  if (num_controllers_connected < MAX_CONTROLLERS) {
+    for (uint controller_i = 0; controller_i < MAX_CONTROLLERS; ++controller_i) {
+      SDLGameController* controller = &controllers[controller_i];
+      if (controller->is_connected) {
+        continue; 
+      }
+      // setup controller
+    }                  
+  }
+}
+
+CONTROLLER_REMOVED: {
+  for (uint controller_i = 0; controller_i < MAX_CONTROLLERS; ++controller_i) {
+    SDLGameController* controller = &controllers[controller_i];
+    if (controller->joystick_id == cdevice.joystick_id) {
+      // remove controller
+      --num_controllers_connected;
+    }
+  }                  
+}
+
+int 
+main(int argc, char* argv[argc + 1])
+{
+  if (SDL_Init(SDL_INIT_EVERYTHING) < 0) {
+    // TODO(Ryan): Implement organised logging when game is nearly complete
+    //             and want to ascertain failure points across different end user machines.
+    SDL_Log("Unable to initialise SDL: %s", SDL_GetError());
+    return EXIT_FAILURE;
+  }
+
+  uint window_width = 1280;
+  uint window_height = 720;
+  SDL_Window* window = SDL_CreateWindow(
+                                        "Handmade Hero", 
+                                        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                                        window_width, window_height, 
+                                        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
+                                       );
+  if (window == NULL) {
+    SDL_Log("Unable to create SDL window: %s", SDL_GetError());
+    return EXIT_FAILURE;
+  }
+
+  sdl_load_currently_connected_game_controllers();
+
+  HHPixelBuffer pixel_buffer = {0};
+  pixel_buffer.memory = malloc();
+
+  HHInput inputs[2];
+  HHInput* cur_input = &inputs[0];
+  HHInput* prev_input = &inputs[1];
+
+  SDL_GLContext context = SDL_GL_CreateContext(window);
+
+  global_want_to_run = true;
+  while (global_want_to_run) {
+    SDL_Event event = {0};
+    while (SDL_PollEvent(&event) != 0) {
+     if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE) {
+        global_want_to_run = false; 
+     }
+     if (event.type == SDL_QUIT) {
+        global_want_to_run = false; 
+     }
+     if (event.type == SDL_CONTROLLERDEVICEADDED) {
+
+     }
+     if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
+             
+     }
+    }
+
+    sw_render(&pixel_buffer, &cur_input);
+
+    display_pixel_buffer_in_window();
+
+    SW_SWAP(cur_input, prev_input)
+  }
+
+  return 0;
+}
+
+INTERNAL void
+display_pixel_buffer_in_window()
+{
+  glViewport(0, 0, window_width, window_height);
+  glClearColor(1.f, 0.f, 1.f, 0.f);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+
+  glBegin(GL_TRIANGLES);
+
+  glVertex2i(0, 0);
+  glVertex2i(window_width, 0);
+  glVertex2i(window_width, window_height);
+
+  glVertex2i(0, 0);
+  glVertex2i(0, window_height);
+  glVertex2i(window_width, window_height);
+  glEnd();
+
+  SDL_GL_SwapWindow(window);
+}
+
+INTERNAL SDL_Rect
+aspect_ratio_fit(uint render_width, uint render_height, uint window_width, uint window_height)
+{
+  SDL_Rect result = {0};
+
+  // NOTE(Ryan): Better to only have parameter checking on public calls, but do everywhere when developing
+  if ((render_width > 0) &&
+      (render_height > 0) &&
+      (window_width > 0) &&
+      (window_height > 0)) {
+
+    float optimal_window_width = (float)window_height * ((float)render_width / (float)render_height);
+    float optimal_window_height = (float)window_width * ((float)render_height / (float)render_width);
+
+    // 32:00
+    if (optimal_window_width > (float)window_width) {
+      result.x = 0;
+      result.w = window_width; 
+    } else {
+    
+    }
+
+  }
 
 
 
