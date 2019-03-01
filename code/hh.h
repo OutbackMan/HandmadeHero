@@ -42,46 +42,6 @@ typedef int64_t int64;
 #define IS_BIT_SET(bitmask, bit) \
   ((bitmask) & (1 << (bit)))
 
-typedef struct {
-  // NOTE(Ryan): These pixels are arranged BB GG RR AA
-  void* memory;
-  uint width;
-  uint height;
-  uint pitch;
-} HHPixelBuffer;
-
-// NOTE(Ryan): This gives us the opportunity to handle increased polling
-typedef struct {
-  uint num_times_up_down;
-  bool ended_down;
-} HHBtnState;
-
-typedef struct {
-  bool is_connected;
-  bool is_analog;
-
-  union {
-    HHBtnState buttons[6];
-    struct {
-      HHBtnState up_btn;
-    };
-  };
-} HHGameController;
-
-typedef struct {
-  HHGameController controllers[4];
-
-} HHInput;
-
-void 
-hh_render_gradient(
-                   HHPixelBuffer* restrict pixel_buffer, 
-                   uint green_offset, 
-                   uint blue_offset
-                  );
-
-#endif
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <GL/gl.h>
@@ -91,25 +51,26 @@ hh_render_gradient(
 
 GLOBAL bool global_want_to_run;
 
-#define MAX_CONTROLLERS 4
+#define NUM_CONTROLLERS_SUPPORTED 8
 typedef struct {
   int32 joystick_id;
   SDL_GameController* controller;
   SDL_Haptic* haptic;
 } SDLGameController;
 
-GLOBAL SDLGameController controllers[MAX_CONTROLLERS];
-GLOBAL uint num_controllers_connected = 0;
+GLOBAL SDLGameController controllers[NUM_CONTROLLERS_SUPPORTED];
 
 INTERNAL void
-sdl_load_currently_connected_game_controllers(void)
+sdl_find_game_controllers(void)
 {
   uint num_joysticks = SDL_NumJoysticks(); 
+  uint num_controllers_found = 0;
+
   for (uint joystick_i = 0; joystick_i < num_joysticks; ++joystick_i) {
     if (!SDL_IsGameController(joystick_i)) {
       continue; 
     }
-    if (num_controllers_connected >= MAX_CONTROLLERS) {
+    if (num_controllers_found >= NUM_CONTROLLERS_SUPPORTED) {
       break; 
     }
 
@@ -122,8 +83,20 @@ sdl_load_currently_connected_game_controllers(void)
       
     controllers[num_controllers_connected]->joystick_id = joystick_i;
 
-    ++num_controllers_connected;
+    ++num_controllers_found;
   }
+}
+
+INTERNAL void
+sdl_close_game_controller(int32 joystick_id) 
+{
+
+}
+
+INTERNAL void
+sdl_open_game_controller(int32 joystick_id) 
+{
+
 }
 
 
@@ -172,7 +145,7 @@ main(int argc, char* argv[argc + 1])
     return EXIT_FAILURE;
   }
 
-  sdl_load_currently_connected_game_controllers();
+  sdl_find_connected_game_controllers();
 
   HHPixelBuffer pixel_buffer = {0};
   pixel_buffer.memory = malloc();
@@ -201,20 +174,52 @@ main(int argc, char* argv[argc + 1])
      }
     }
 
+    for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
+      // iterate through controllers here 
+    }
+
     sw_render(&pixel_buffer, &cur_input);
 
     display_pixel_buffer_in_window();
 
-    SW_SWAP(cur_input, prev_input)
+    // Usable macros have type safety
+    SWAP_T(cur_input, prev_input)
   }
 
   return 0;
+}
+
+
+// place inside hh-opengl.c
+void
+rendering()
+{
+  case CLEAR: {
+    glClearColor(1.f, 0.f, 1.f, 0.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+  }
+  case RECTANGLE: {
+    // triangle rendering
+  }
 }
 
 INTERNAL void
 display_pixel_buffer_in_window()
 {
   glViewport(0, 0, window_width, window_height);
+
+  // This only needs to be done once. IF AT ALL?? JUST USE ARBITRARY INTS??
+  GLunit texture_handle = 0;
+  glGenTextures(1, &texture_handle);
+  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+  // glTexParameteri();
+
+  // NOTE(Ryan): Little endian writes to memory in opposite order as stored in register
+  glBindTexture(GL_TEXTURE_2D, texture_handle);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, buffer->width, buffer->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer->memory);
+  glEnable(GL_TEXTURE_2D);
+ 
   glClearColor(1.f, 0.f, 1.f, 0.f);
   glClear(GL_COLOR_BUFFER_BIT);
 
@@ -222,9 +227,15 @@ display_pixel_buffer_in_window()
   glLoadIdentity();
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
+  glMatrixMode(GL_TEXTURE);
+  glLoadIdentity();
 
   glBegin(GL_TRIANGLES);
 
+  // NOTE(Ryan): Texture is 0,0 --> 1,1
+  glTexCoord2f(.0f, .0f);
+
+  // NOTE(Ryan): Due to clipping to unit cube, put -1, 1
   glVertex2i(0, 0);
   glVertex2i(window_width, 0);
   glVertex2i(window_width, window_height);
@@ -251,16 +262,32 @@ aspect_ratio_fit(uint render_width, uint render_height, uint window_width, uint 
     float optimal_window_width = (float)window_height * ((float)render_width / (float)render_height);
     float optimal_window_height = (float)window_width * ((float)render_height / (float)render_width);
 
-    // 32:00
     if (optimal_window_width > (float)window_width) {
       result.x = 0;
       result.w = window_width; 
+
+      float empty_vspace = (float)window_height - optimal_window_height;
+      // Using intrinsics performs overflow checking for us.
+      int32 half_empty_vspace = round_float_to_int(0.5f * empty_vspace);
+      int32 rounded_empty_vspace = round_float_to_int(empty_vspace);
+
+      result.y = half_emtpy_vspace;
+      result.height = result.y + rounded_empty_vspace;
     } else {
-    
+      result.y = 0;
+      result.height = window_height; 
+
+      float empty_hspace = (float)window_width - optimal_window_width;
+      int32 half_empty_hspace = round_float_to_int(0.5f * empty_hspace);
+      int32 rounded_empty_hspace = round_float_to_int(empty_hspace);
+
+      result.x = half_empty_hspace;
+      result.width = result.x + rounded_empty_hspace;
     }
-
   }
-
+  
+  return result;
+}
 
 
 
