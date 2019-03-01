@@ -42,21 +42,21 @@ typedef int64_t int64;
 #define IS_BIT_SET(bitmask, bit) \
   ((bitmask) & (1 << (bit)))
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
-#include <GL/gl.h>
-
-#include "hh.h"
-#include "hh.c"
-
 GLOBAL bool global_want_to_run;
 
+#define INT32_MIN_VALUE -2147483648  
+#define UNUSED_JOYSTICK_ID INT32_MIN_VALUE
 #define NUM_CONTROLLERS_SUPPORTED 8
 typedef struct {
   int32 joystick_id;
   SDL_GameController* controller;
   SDL_Haptic* haptic;
 } SDLGameController;
+
+// initialise last as it is not essential
+typedef struct {
+  
+} SDLSoundOutput;
 
 GLOBAL SDLGameController controllers[NUM_CONTROLLERS_SUPPORTED];
 
@@ -74,14 +74,7 @@ sdl_find_game_controllers(void)
       break; 
     }
 
-    controllers[num_controllers_connected]->controller = SDL_GameControllerOpen(joystick_i);
-    SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controllers[num_controllers_connected]->controller);
-    controllers[num_controllers_connected]->haptic = SDL_HapticOpenFromJoystick(joystick);
-    if (SDL_HapticRumbleInit(controllers[num_controllers_connected]->haptic) < 0) {
-      SDL_HapticClose(controllers[num_controllers_connected]->haptic);
-    }
-      
-    controllers[num_controllers_connected]->joystick_id = joystick_i;
+    sdl_open_game_controller(joystick_i);
 
     ++num_controllers_found;
   }
@@ -90,36 +83,48 @@ sdl_find_game_controllers(void)
 INTERNAL void
 sdl_close_game_controller(int32 joystick_id) 
 {
+  for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
+    if (controllers[controller_i].joystick_id == joystick_id) {
+      if (controllers[controller_i].haptic != NULL) {
+        SDL_HapticClose(controllers[controller_i].haptic);
+        controllers[controller_i].haptic = NULL;
+      } 
 
+      SDL_GameControllerClose(controllers[controller_i].controller);
+      controllers[controller_i].controller = NULL;
+
+      controllers[controller_i].joystick_id = UNUSED_JOYSTICK_ID;
+    } 
+  }
 }
 
 INTERNAL void
 sdl_open_game_controller(int32 joystick_id) 
 {
-
-}
-
-
-CONTROLLER_ADDED: {
-  if (num_controllers_connected < MAX_CONTROLLERS) {
-    for (uint controller_i = 0; controller_i < MAX_CONTROLLERS; ++controller_i) {
-      SDLGameController* controller = &controllers[controller_i];
-      if (controller->is_connected) {
-        continue; 
+  for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
+    if (controllers[controller_i].controller != NULL) {
+      controllers[controller_i].controller = SDL_GameControllerOpen(joystick_id);
+      if (controllers[controller_i].controller == NULL) {
+        SDL_Log("Unable to open SDL game controller: %s", SDL_GetError());
+        return;
       }
-      // setup controller
-    }                  
-  }
-}
+      
+      SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controllers[controller_i].controller);
 
-CONTROLLER_REMOVED: {
-  for (uint controller_i = 0; controller_i < MAX_CONTROLLERS; ++controller_i) {
-    SDLGameController* controller = &controllers[controller_i];
-    if (controller->joystick_id == cdevice.joystick_id) {
-      // remove controller
-      --num_controllers_connected;
-    }
-  }                  
+      controllers[controller_i].haptic = SDL_HapticOpenFromJoystick(joystick);
+      if (controllers[controller_i].haptic == NULL) {
+        SDL_Log("Unable to open SDL haptic from SDL game controller: %s", SDL_GetError());
+      } else {
+        if (SDL_HapticRumbleInit(controllers[controller_i].haptic) < 0) {
+          SDL_Log("Unable to initialise rumble from SDL haptic: %s", SDL_GetError());
+          SDL_HapticClose(controllers[controller_i].haptic);
+          controllers[controller_i].haptic = NULL;
+        }
+      }
+        
+      controllers[controller_i].joystick_id = joystick_id;
+    } 
+  }
 }
 
 int 
@@ -145,7 +150,7 @@ main(int argc, char* argv[argc + 1])
     return EXIT_FAILURE;
   }
 
-  sdl_find_connected_game_controllers();
+  sdl_find_game_controllers();
 
   HHPixelBuffer pixel_buffer = {0};
   pixel_buffer.memory = malloc();
@@ -167,10 +172,10 @@ main(int argc, char* argv[argc + 1])
         global_want_to_run = false; 
      }
      if (event.type == SDL_CONTROLLERDEVICEADDED) {
-
+       sdl_open_game_controller(event.cdevice.which);
      }
      if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
-             
+       sdl_close_game_controller(event.cdevice.which);
      }
     }
 
@@ -288,7 +293,6 @@ aspect_ratio_fit(uint render_width, uint render_height, uint window_width, uint 
   
   return result;
 }
-
 
 
 
