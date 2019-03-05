@@ -42,21 +42,26 @@ typedef int64_t int64;
 #define IS_BIT_SET(bitmask, bit) \
   ((bitmask) & (1 << (bit)))
 
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+#include <GL/gl.h>
+
+#include "hh.h"
+#include "hh.c"
+
 GLOBAL bool global_want_to_run;
 
 #define INT32_MIN_VALUE -2147483648  
 #define UNUSED_JOYSTICK_ID INT32_MIN_VALUE
 #define NUM_CONTROLLERS_SUPPORTED 8
 typedef struct {
-  int32 joystick_id;
+  // NOTE(Ryan): device_id is for controller connections
+  int32 joystick_device_id;
+  SDL_JoystickID joystick_instance_id;
   SDL_GameController* controller;
   SDL_Haptic* haptic;
 } SDLGameController;
 
-// initialise last as it is not essential
-typedef struct {
-  
-} SDLSoundOutput;
 
 GLOBAL SDLGameController controllers[NUM_CONTROLLERS_SUPPORTED];
 
@@ -101,6 +106,7 @@ sdl_close_game_controller(int32 joystick_id)
 INTERNAL void
 sdl_open_game_controller(int32 joystick_id) 
 {
+  //SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) as joystick different on added and button down 
   for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
     if (controllers[controller_i].controller != NULL) {
       controllers[controller_i].controller = SDL_GameControllerOpen(joystick_id);
@@ -127,10 +133,66 @@ sdl_open_game_controller(int32 joystick_id)
   }
 }
 
+typedef struct {
+  bool is_connected;
+  bool is_analog;
+  float stick_x;
+  float stick_y;  
+
+  union {
+    HHButtonState buttons[12];
+    struct {
+      HHButtonState move_up; 
+      HHButtonState move_down; 
+      HHButtonState move_left; 
+      HHButtonState move_right; 
+
+      HHButtonState action_up; 
+      HHButtonState action_down; 
+      HHButtonState action_left; 
+      HHButtonState action_right; 
+
+      HHButtonState left_shoulder; 
+      HHButtonState right_shoulder; 
+
+      HHButtonState back; 
+      HHButtonState start; 
+
+      HHButtonState guide; 
+    } 
+  }
+} HHController;
+
+typedef struct {
+  HHController controllers[NUM_GAME_CONTROLLERS_SUPPORTED + 1];
+} HHInput;
+
+GLOBAL sound_is_playing = false;
+
+INTERNAL void
+sdl_init_audio(u32 samples_per_second, u32 buffer_size)
+{
+  SDL_AudioSpec audio_spec = {0};
+  audio_spec.freq = samples_per_second;
+  audio_spec.format = AUDIO_S16LSB;
+  audio_spec.channels = 2;
+  audio_spec.samples = buffer_size;
+
+  if (SDL_OpenAudio(&audio_spec, NULL) < 0) {
+    SDL_Log("Unable to open SDL audio: %s", SDL_GetError());
+    return;
+  }
+
+  if (audio_spec.format != AUDIO_S16LSB) {
+    SDL_Log("Did not recieve desired SDL audio format: %s", SDL_GetError());
+    SDL_CloseAudio();
+  }
+}
+
 int 
 main(int argc, char* argv[argc + 1])
 {
-  if (SDL_Init(SDL_INIT_EVERYTHING) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO) < 0) {
     // TODO(Ryan): Implement organised logging when game is nearly complete
     //             and want to ascertain failure points across different end user machines.
     SDL_Log("Unable to initialise SDL: %s", SDL_GetError());
@@ -155,9 +217,15 @@ main(int argc, char* argv[argc + 1])
   HHPixelBuffer pixel_buffer = {0};
   pixel_buffer.memory = malloc();
 
-  HHInput inputs[2];
-  HHInput* cur_input = &inputs[0];
-  HHInput* prev_input = &inputs[1];
+  uint samples_per_second = 48000;
+  uint bytes_per_sample = sizeof(int16) * 2;
+  sdl_init_audio(samples_per_second, samples_per_second * bytes_per_sample / 60);
+
+  // NOTE(Ryan): Hardware sound buffer is 1 second long. We only want to write a small amount of this to avoid latency issues
+  uint latency_sample_count = samples_per_second / 15;
+  int16* samples = calloc(latency_sample_count, bytes_per_sample);
+
+  HHInput input = {0};
 
   SDL_GLContext context = SDL_GL_CreateContext(window);
 
@@ -165,29 +233,80 @@ main(int argc, char* argv[argc + 1])
   while (global_want_to_run) {
     SDL_Event event = {0};
     while (SDL_PollEvent(&event) != 0) {
-     if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE) {
-        global_want_to_run = false; 
+     switch (event.type) {
+       case SDL_QUIT: {
+        want_to_run = false; 
+       } break;
+       case SDL_WINDOWEVENT: {
+         if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+           want_to_run = false;             
+         }
+       } break;
+       case SDL_KEYDOWN:
+       case SDL_KEYUP: {
+         SDL_Keycode key_code = event.key.keysm.sym; 
+         bool is_key_down = (event.key.state == SDL_PRESSED); 
+         bool was_key_down = (event.key.state == SDL_RELEASED);
+         
+         // NOTE(Ryan): Users will have to check if is held
+         if (key_code == SDLK_w) {
+           input.controller[0].move_up.is_down = is_key_down; 
+           input.controller[0].move_up.was_down = was_key_down;
+         }
+       } break;
+       case SDL_CONTROLLERDEVICEADDED: {
+         sdl_open_game_controller(event.cdevice.which);
+       } break;
+       case SDL_CONTROLLERDEVICEREMOVED: {
+         sdl_close_game_controller(event.cdevice.which);
+       } break;
+       case SDL_CONTROLLERAXISMOTION: {
+         for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
+           if (controllers[controller_i].joystick_instance_id == event.caxis.which) {
+           
+           }
+       } break;
+       case SDL_CONTROLLERBUTTONDOWN:
+       case SDL_CONTROLLERBUTTONUP: {
+         for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
+           if (controllers[controller_i].joystick_instance_id == event.cbutton.which) {
+             bool is_button_down = (event.cbutton.state == SDL_PRESSED); 
+             bool was_button_down = (event.cbutton.state == SDL_RELEASED);
+
+             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
+             
+             }
+           } 
+         }
+       } break;
      }
-     if (event.type == SDL_QUIT) {
-        global_want_to_run = false; 
-     }
-     if (event.type == SDL_CONTROLLERDEVICEADDED) {
-       sdl_open_game_controller(event.cdevice.which);
-     }
-     if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
-       sdl_close_game_controller(event.cdevice.which);
-     }
+     
     }
 
-    for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
-      // iterate through controllers here 
+    // SDL_HapticRumblePlay(controllers[controller_i].rumble, 0.5f, 2000);
+
+    uint target_queue_bytes = latency_sample_count * bytes_per_sample; 
+    uint bytes_to_write = target_queue_bytes - SDL_GetQueuedAudioSize(1);
+
+    HHSoundBuffer hh_sound_buffer = {0};
+    hh_sound_buffer.samples_per_second = samples_per_second;
+    hh_sound_buffer.sample_count = bytes_to_write / bytes_per_sample;
+    hh_sound_buffer.samples = samples;
+
+    hh_render_and_update(&hh_pixel_buffer, &hh_input, &hh_sound_buffer);
+    
+    SDL_QueueAudio(1, samples, bytes_to_write);
+
+    if (!sound_is_playing) {
+      SDL_PauseAudio(0); 
+      sound_is_playing = true;
     }
 
-    sw_render(&pixel_buffer, &cur_input);
+    opengl_display_pixel_buffer(&pixel_buffer);
 
-    display_pixel_buffer_in_window();
+    SDL_GL_SwapWindow(window);
 
-    // Usable macros have type safety
+    // Usable macros have type safety and scope management with expression statements
     SWAP_T(cur_input, prev_input)
   }
 
@@ -250,7 +369,6 @@ display_pixel_buffer_in_window()
   glVertex2i(window_width, window_height);
   glEnd();
 
-  SDL_GL_SwapWindow(window);
 }
 
 INTERNAL SDL_Rect
@@ -293,9 +411,3 @@ aspect_ratio_fit(uint render_width, uint render_height, uint window_width, uint 
   
   return result;
 }
-
-
-
-
-
-
