@@ -1,47 +1,3 @@
-#if !defined(HH_H)
-#define HH_H
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-
-#define GLOBAL static
-#define INTERNAL static
-#define PERSIST static
-
-typedef unsigned int uint;
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef int8_t int8;
-typedef int16_t int16;
-typedef int32_t int32;
-typedef int64_t int64;
-
-#define IS_SAME_TYPE(var1, var2) \
-  (__builtin_types_compatible_p(typeof(var1), typeof(var1)))
-
-#define ARRAY_LENGTH(arr) \
-  (sizeof(arr)/sizeof((arr)[0])) + \
-    (!IS_SAME_TYPE(arr, &(arr)[0])) ? (_Pragma("GCC Error \"ARRAY_LENGTH macro did not recieve expected array input\"")) : 0
-
-#define SWAP(var1, var2) \
-  ({typeof(var1) temp = var1; var1 = var2; var2 = temp;}) + \
-    (!IS_SAME_TYPE(var1, var2)) ? (_Pragma("GCC Error \"SWAP macro did not recieve inputs of same type\"")) : 0
-
-#define MIN(var1, var2) \
-  ((var1) < (var2) ? (var1) : (var2)) \
-    + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
-
-#define MAX(var1, var2) \
-  ((var1) > (var2) ? (var1) : (var2)) \
-    + RAISE_ERROR_ON_ZERO(IS_SAME_TYPE(var1, var2))
-
-#define IS_BIT_SET(bitmask, bit) \
-  ((bitmask) & (1 << (bit)))
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <GL/gl.h>
@@ -55,6 +11,7 @@ GLOBAL bool global_want_to_run;
 #define UNUSED_JOYSTICK_ID INT32_MIN_VALUE
 #define NUM_CONTROLLERS_SUPPORTED 8
 typedef struct {
+  uint controller_num;
   // NOTE(Ryan): device_id is for controller connections
   int32 joystick_device_id;
   SDL_JoystickID joystick_instance_id;
@@ -64,24 +21,24 @@ typedef struct {
 
 
 GLOBAL SDLGameController controllers[NUM_CONTROLLERS_SUPPORTED];
+GLOBAL uint num_game_controllers_connected = 0;
 
 INTERNAL void
 sdl_find_game_controllers(void)
 {
   uint num_joysticks = SDL_NumJoysticks(); 
-  uint num_controllers_found = 0;
 
   for (uint joystick_i = 0; joystick_i < num_joysticks; ++joystick_i) {
     if (!SDL_IsGameController(joystick_i)) {
       continue; 
     }
-    if (num_controllers_found >= NUM_CONTROLLERS_SUPPORTED) {
+    if (num_game_controllers_connected >= NUM_CONTROLLERS_SUPPORTED) {
       break; 
     }
 
     sdl_open_game_controller(joystick_i);
 
-    ++num_controllers_found;
+    ++num_game_controllers_connected;
   }
 }
 
@@ -106,7 +63,6 @@ sdl_close_game_controller(int32 joystick_id)
 INTERNAL void
 sdl_open_game_controller(int32 joystick_id) 
 {
-  //SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) as joystick different on added and button down 
   for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
     if (controllers[controller_i].controller != NULL) {
       controllers[controller_i].controller = SDL_GameControllerOpen(joystick_id);
@@ -114,8 +70,11 @@ sdl_open_game_controller(int32 joystick_id)
         SDL_Log("Unable to open SDL game controller: %s", SDL_GetError());
         return;
       }
+      controllers[controller_i].controller_num = ++num_game_controllers_connected;
       
       SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controllers[controller_i].controller);
+
+      controllers[controller_i].joystick_instance_id = SDL_JoystickInstanceID(joystick);
 
       controllers[controller_i].haptic = SDL_HapticOpenFromJoystick(joystick);
       if (controllers[controller_i].haptic == NULL) {
@@ -155,7 +114,7 @@ typedef struct {
       HHButtonState left_shoulder; 
       HHButtonState right_shoulder; 
 
-      HHButtonState back; 
+      HHButtonState back;
       HHButtonState start; 
 
       HHButtonState guide; 
@@ -225,7 +184,9 @@ main(int argc, char* argv[argc + 1])
   uint latency_sample_count = samples_per_second / 15;
   int16* samples = calloc(latency_sample_count, bytes_per_sample);
 
-  HHInput input = {0};
+  HHInput input[2];
+  HHInput prev_input = input[0];
+  HHInput cur_input = input[1];
 
   SDL_GLContext context = SDL_GL_CreateContext(window);
 
@@ -245,14 +206,28 @@ main(int argc, char* argv[argc + 1])
        case SDL_KEYDOWN:
        case SDL_KEYUP: {
          SDL_Keycode key_code = event.key.keysm.sym; 
-         bool is_key_down = (event.key.state == SDL_PRESSED); 
-         bool was_key_down = (event.key.state == SDL_RELEASED);
-         
-         // NOTE(Ryan): Users will have to check if is held
+         bool is_down = (event.key.state == SDL_PRESSED); 
+
          if (key_code == SDLK_w) {
-           input.controller[0].move_up.is_down = is_key_down; 
-           input.controller[0].move_up.was_down = was_key_down;
+           if (prev_input.controllers[0].move_up.ended_down) {
+             was_down = true; 
+           }
+           if (is_down != was_down) {
+             cur_input.controllers[0].move_up.ended_down = is_down;
+             cur_input.controllers[0].move_up.half_transition_count++;
+           }
          }
+
+         if (key_code == SDLK_a) {
+           if (prev_input.controllers[0].move_left.ended_down) {
+             was_down = true; 
+           }
+           if (is_down != was_down) {
+             cur_input.controllers[0].move_left.ended_down = is_down;
+             cur_input.controllers[0].move_left.half_transition_count++;
+           }
+         }
+
        } break;
        case SDL_CONTROLLERDEVICEADDED: {
          sdl_open_game_controller(event.cdevice.which);
@@ -271,10 +246,10 @@ main(int argc, char* argv[argc + 1])
          for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
            if (controllers[controller_i].joystick_instance_id == event.cbutton.which) {
              bool is_button_down = (event.cbutton.state == SDL_PRESSED); 
-             bool was_button_down = (event.cbutton.state == SDL_RELEASED);
+             bool was_button_down = (event.cbutton.state == SDL_RELEASED) || prev_input.controllers[controller_i].ended_down;
 
              if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
-             
+               input.controllers[controllers[controller_i].controller_num].move_up.is_down = is_button_down; 
              }
            } 
          }
@@ -306,8 +281,9 @@ main(int argc, char* argv[argc + 1])
 
     SDL_GL_SwapWindow(window);
 
-    // Usable macros have type safety and scope management with expression statements
-    SWAP_T(cur_input, prev_input)
+    prev_input = cur_input;
+    cur_input = (const HHInput){0};
+  }
   }
 
   return 0;
