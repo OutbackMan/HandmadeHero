@@ -1,132 +1,97 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
-#include <GL/gl.h>
 
 #include "hh.h"
 #include "hh.c"
+#include "hh-opengl.c"
 
-GLOBAL bool global_want_to_run;
-
-#define INT32_MIN_VALUE -2147483648  
-#define UNUSED_JOYSTICK_ID INT32_MIN_VALUE
-#define NUM_CONTROLLERS_SUPPORTED 8
+#define INT32_MIN_VALUE -2147483648
+#define UNUSED_SDL_JOYSTICK_CONNECTION_ID INT32_MIN_VALUE
+#define SDL_GAME_CONTROLLER_STICK_DEADZONE 7849
 typedef struct {
-  uint controller_num;
-  // NOTE(Ryan): device_id is for controller connections
-  int32 joystick_device_id;
-  SDL_JoystickID joystick_instance_id;
+  SDL_JoystickID instance_joystick_id;
   SDL_GameController* controller;
   SDL_Haptic* haptic;
 } SDLGameController;
 
-
-GLOBAL SDLGameController controllers[NUM_CONTROLLERS_SUPPORTED];
-GLOBAL uint num_game_controllers_connected = 0;
+GLOBAL SDLGameController sdl_game_controllers[NUM_GAME_CONTROLLERS_SUPPORTED] = {0};
 
 INTERNAL void
-sdl_find_game_controllers(void)
+sdl_find_exisiting_game_controllers(void)
 {
-  uint num_joysticks = SDL_NumJoysticks(); 
+  int num_joysticks = SDL_NumJoysticks(); 
 
-  for (uint joystick_i = 0; joystick_i < num_joysticks; ++joystick_i) {
+  for (int joystick_i = 0; joystick_i < num_joysticks; ++joystick_i) {
+    if (num_sdl_game_controllers_connected == NUM_GAME_CONTROLLERS_SUPPORTED) {
+      break; 
+    }
     if (!SDL_IsGameController(joystick_i)) {
       continue; 
     }
-    if (num_game_controllers_connected >= NUM_CONTROLLERS_SUPPORTED) {
-      break; 
-    }
 
     sdl_open_game_controller(joystick_i);
-
-    ++num_game_controllers_connected;
   }
 }
 
 INTERNAL void
-sdl_close_game_controller(int32 joystick_id) 
+sdl_open_game_controller(int device_joystick_id) 
 {
-  for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
-    if (controllers[controller_i].joystick_id == joystick_id) {
-      if (controllers[controller_i].haptic != NULL) {
-        SDL_HapticClose(controllers[controller_i].haptic);
-        controllers[controller_i].haptic = NULL;
-      } 
-
-      SDL_GameControllerClose(controllers[controller_i].controller);
-      controllers[controller_i].controller = NULL;
-
-      controllers[controller_i].joystick_id = UNUSED_JOYSTICK_ID;
-    } 
-  }
-}
-
-INTERNAL void
-sdl_open_game_controller(int32 joystick_id) 
-{
-  for (uint controller_i = 0; controller_i < NUM_CONTROLLERS_SUPPORTED; ++controller_i) {
-    if (controllers[controller_i].controller != NULL) {
-      controllers[controller_i].controller = SDL_GameControllerOpen(joystick_id);
-      if (controllers[controller_i].controller == NULL) {
+  for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
+    if (sdl_game_controllers[controller_i].controller != NULL) {
+      sdl_game_controllers[controller_i].controller = SDL_GameControllerOpen(device_joystick_id);
+      if (sdl_game_controllers[controller_i].controller == NULL) {
         SDL_Log("Unable to open SDL game controller: %s", SDL_GetError());
         return;
       }
-      controllers[controller_i].controller_num = ++num_game_controllers_connected;
       
-      SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controllers[controller_i].controller);
+      SDL_Joystick* joystick = SDL_GameControllerGetJoystick(sdl_game_controllers[controller_i].controller);
 
-      controllers[controller_i].joystick_instance_id = SDL_JoystickInstanceID(joystick);
+      sdl_game_controllers[controller_i].instance_joystick_id = SDL_JoystickInstanceID(joystick);
 
-      controllers[controller_i].haptic = SDL_HapticOpenFromJoystick(joystick);
-      if (controllers[controller_i].haptic == NULL) {
+      sdl_game_controllers[controller_i].haptic = SDL_HapticOpenFromJoystick(joystick);
+      if (sdl_game_controllers[controller_i].haptic == NULL) {
         SDL_Log("Unable to open SDL haptic from SDL game controller: %s", SDL_GetError());
       } else {
-        if (SDL_HapticRumbleInit(controllers[controller_i].haptic) < 0) {
-          SDL_Log("Unable to initialise rumble from SDL haptic: %s", SDL_GetError());
-          SDL_HapticClose(controllers[controller_i].haptic);
-          controllers[controller_i].haptic = NULL;
+        if (SDL_HapticRumbleInit(sdl_game_controllers[controller_i].haptic) < 0) {
+          SDL_Log("Unable to initialize rumble from SDL haptic: %s", SDL_GetError());
+          SDL_HapticClose(sdl_game_controllers[controller_i].haptic);
+          sdl_game_controllers[controller_i].haptic = NULL;
         }
       }
-        
-      controllers[controller_i].joystick_id = joystick_id;
     } 
   }
 }
 
-typedef struct {
-  bool is_connected;
-  bool is_analog;
-  float stick_x;
-  float stick_y;  
+INTERNAL float
+sdl_normalize_stick(int16 stick_value)
+{
+  if (stick_value < -SDL_GAME_CONTROLLER_DEADZONE) {
+    return (float)(stick_value + SDL_GAME_CONTROLLER_DEADZONE) / (32768.0f - SDL_GAME_CONTROLLER_DEADZONE);
+  } else if (stick_value > SDL_GAME_CONTROLLER_DEADZONE) {
+    return (float)(stick_value - SDL_GAME_CONTROLLER_DEADZONE) / (32767.0f - SDL_GAME_CONTROLLER_DEADZONE);
+  } else {
+    return 0.0f;
+  }
+}
 
-  union {
-    HHButtonState buttons[12];
-    struct {
-      HHButtonState move_up; 
-      HHButtonState move_down; 
-      HHButtonState move_left; 
-      HHButtonState move_right; 
+INTERNAL void
+sdl_close_game_controller(SDL_JoystickID instance_joystick_id) 
+{
+  for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
+    if (sdl_game_controllers[controller_i].instance_joystick_id == instance_joystick_id) {
+      if (sdl_game_controllers[controller_i].haptic != NULL) {
+        SDL_HapticClose(sdl_game_controllers[controller_i].haptic);
+        sdl_game_controllers[controller_i].haptic = NULL;
+      } 
 
-      HHButtonState action_up; 
-      HHButtonState action_down; 
-      HHButtonState action_left; 
-      HHButtonState action_right; 
+      SDL_GameControllerClose(sdl_game_controllers[controller_i].controller);
+      sdl_game_controllers[controller_i].controller = NULL;
 
-      HHButtonState left_shoulder; 
-      HHButtonState right_shoulder; 
-
-      HHButtonState back;
-      HHButtonState start; 
-
-      HHButtonState guide; 
+      sdl_game_controllers[controller_i].instance_joystick_id = UNUSED_JOYSTICK_ID;
     } 
   }
-} HHController;
+}
 
-typedef struct {
-  HHController controllers[NUM_GAME_CONTROLLERS_SUPPORTED + 1];
-} HHInput;
-
-GLOBAL sound_is_playing = false;
 
 INTERNAL void
 sdl_init_audio(u32 samples_per_second, u32 buffer_size)
@@ -148,12 +113,15 @@ sdl_init_audio(u32 samples_per_second, u32 buffer_size)
   }
 }
 
+GLOBAL bool want_to_run = false;
+GLOBAL bool sound_is_playing = false;
+
 int 
 main(int argc, char* argv[argc + 1])
 {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO) < 0) {
     // TODO(Ryan): Implement organised logging when game is nearly complete
-    //             and want to ascertain failure points across different end user machines.
+    // and want to ascertain failure points across different end user machines.
     SDL_Log("Unable to initialise SDL: %s", SDL_GetError());
     return EXIT_FAILURE;
   }
@@ -167,7 +135,7 @@ main(int argc, char* argv[argc + 1])
                                         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
                                        );
   if (window == NULL) {
-    SDL_Log("Unable to create SDL window: %s", SDL_GetError());
+    SDL_Log("Unable to create sdl window: %s", SDL_GetError());
     return EXIT_FAILURE;
   }
 
@@ -184,14 +152,24 @@ main(int argc, char* argv[argc + 1])
   uint latency_sample_count = samples_per_second / 15;
   int16* samples = calloc(latency_sample_count, bytes_per_sample);
 
-  HHInput input[2];
-  HHInput prev_input = input[0];
-  HHInput cur_input = input[1];
-
   SDL_GLContext context = SDL_GL_CreateContext(window);
+  if (SDL_GL_SetSwapInterval(-1) < 0) {
+    SDL_Log("Unable to enable adaptive vsync for sdl opengl context: %s", SDL_GetError());
+    if (SDL_GL_SetSwapInterval(1) < 0) {
+      SDL_Log("Unable to enable vsync for sdl opengl context: %s", SDL_GetError());
+      // TODO(Ryan): Investigate if this occurs frequently enough to merit a fallback.
+      return EXIT_FAILURE;
+    }
+  }
+  
+  HHInput input = {0};
+  // TODO(Ryan): Add support for multiple keyboards.
+  input.controllers[0].is_connected = true;
 
-  global_want_to_run = true;
-  while (global_want_to_run) {
+  u8 const* keyboard_state = SDL_GetKeyboardState(NULL);
+
+  want_to_run = true;
+  while (want_to_run) {
     SDL_Event event = {0};
     while (SDL_PollEvent(&event) != 0) {
      switch (event.type) {
@@ -203,70 +181,96 @@ main(int argc, char* argv[argc + 1])
            want_to_run = false;             
          }
        } break;
-       case SDL_KEYDOWN:
-       case SDL_KEYUP: {
-         SDL_Keycode key_code = event.key.keysm.sym; 
-         bool is_down = (event.key.state == SDL_PRESSED); 
-
-         if (key_code == SDLK_w) {
-           if (prev_input.controllers[0].move_up.ended_down) {
-             was_down = true; 
-           }
-           if (is_down != was_down) {
-             cur_input.controllers[0].move_up.ended_down = is_down;
-             cur_input.controllers[0].move_up.half_transition_count++;
-           }
-         }
-
-         if (key_code == SDLK_a) {
-           if (prev_input.controllers[0].move_left.ended_down) {
-             was_down = true; 
-           }
-           if (is_down != was_down) {
-             cur_input.controllers[0].move_left.ended_down = is_down;
-             cur_input.controllers[0].move_left.half_transition_count++;
-           }
-         }
-
-       } break;
        case SDL_CONTROLLERDEVICEADDED: {
          sdl_open_game_controller(event.cdevice.which);
        } break;
        case SDL_CONTROLLERDEVICEREMOVED: {
          sdl_close_game_controller(event.cdevice.which);
        } break;
-       case SDL_CONTROLLERAXISMOTION: {
-         for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
-           if (controllers[controller_i].joystick_instance_id == event.caxis.which) {
-           
-           }
-       } break;
-       case SDL_CONTROLLERBUTTONDOWN:
-       case SDL_CONTROLLERBUTTONUP: {
-         for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED; ++controller_i) {
-           if (controllers[controller_i].joystick_instance_id == event.cbutton.which) {
-             bool is_button_down = (event.cbutton.state == SDL_PRESSED); 
-             bool was_button_down = (event.cbutton.state == SDL_RELEASED) || prev_input.controllers[controller_i].ended_down;
-
-             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
-               input.controllers[controllers[controller_i].controller_num].move_up.is_down = is_button_down; 
-             }
-           } 
-         }
-       } break;
      }
-     
+
+    input.controllers[0].move_up = keyboard_state[SDL_SCANCODE_W];
+    input.controllers[0].move_left = keyboard_state[SDL_SCANCODE_A];
+    input.controllers[0].move_down = keyboard_state[SDL_SCANCODE_S];
+    input.controllers[0].move_right = keyboard_state[SDL_SCANCODE_D];
+
+    input.controllers[0].action_up = keyboard_state[SDL_SCANCODE_UP];
+    input.controllers[0].action_left = keyboard_state[SDL_SCANCODE_LEFT];
+    input.controllers[0].action_down = keyboard_state[SDL_SCANCODE_DOWN];
+    input.controllers[0].action_right = keyboard_state[SDL_SCANCODE_RIGHT];
+
+    input.controllers[0].special_left = keyboard_state[SDL_SCANCODE_Q];
+    input.controllers[0].special_right = keyboard_state[SDL_SCANCODE_E];
+
+    input.controllers[0].start = keyboard_state[SDL_SCANCODE_RETURN];
+    input.controllers[0].back = keyboard_state[SDL_SCANCODE_ESCAPE];
+
+         
+    // NOTE(Ryan): Keyboard controller reserves 0th controller position.
+    for (uint game_controller_i = 1; game_controller_i < NUM_GAME_CONTROLLERS_SUPPORTED + 1; ++game_controller_i) {
+      SDL_GameController* sdl_game_controller = &sdl_game_controllers[game_controller_i - 1].controller;
+      if (sdl_game_controller != NULL) {
+        input.controllers[game_controller_i].is_connected = true; 
+
+        int16 normalized_stick_x = \ 
+          sdl_normalize_stick(SDL_GameControllerGetAxis(sdl_game_controller, SDL_CONTROLLER_AXIS_LEFTX)); 
+        int16 normalized_stick_y = \
+          sdl_normalize_stick(SDL_GameControllerGetAxis(sdl_game_controller, SDL_CONTROLLER_AXIS_LEFTY)); 
+        if (normalized_stick_x != 0.0f || normalized_stick_y != 0.0f) {
+          input.controllers[game_controller_i].is_analog = true; 
+        } 
+
+        if (SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_DPAD_UP)) {
+          normalized_stick_y = 1.0f; 
+          input.controllers[game_controller_i].is_analog = false; 
+        }
+        if (SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) {
+          normalized_stick_x = -1.0f; 
+          input.controllers[game_controller_i].is_analog = false; 
+        }
+        if (SDL_GameControllerGetButton(sdl_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) {
+          normalized_stick_y = -1.0f; 
+          input.controllers[game_controller_i].is_analog = false; 
+        }
+        if (SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) {
+          normalized_stick_x = 1.0f; 
+          input.controllers[game_controller_i].is_analog = false; 
+        }
+
+        float threshold = 0.5f; 
+        input.controllers[game_controller_i].move_up = (normalized_stick_y > threshold); 
+        input.controllers[game_controller_i].move_left = (normalized_stick_x < -threshold); 
+        input.controllers[game_controller_i].move_down = (normalized_stick_y < -threshold); 
+        input.controllers[game_controller_i].move_right = (normalized_stick_x > threshold); 
+
+        input.controllers[game_controller_i].stick_x = normalized_stick_x; 
+        input.controllers[game_controller_i].stick_y = normalized_stick_y; 
+
+        input.controllers[game_controller_i].action_up = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_Y);
+        input.controllers[game_controller_i].action_left = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_X);
+        input.controllers[game_controller_i].action_down = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_A);
+        input.controllers[game_controller_i].action_right = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_B);
+
+        input.controllers[game_controller_i].special_left = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+        input.controllers[game_controller_i].special_right = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+
+        input.controllers[game_controller_i].start = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_START);
+        input.controllers[game_controller_i].back = \ 
+          SDL_GameControllerGetButton(sdl_game_controller, SDL_CONTROLLER_BUTTON_BACK);
+      } else {
+        input.controllers[game_controller_i].is_connected = false; 
+        input.controllers[game_controller_i].is_analog = false; 
+      }
     }
 
-    // SDL_HapticRumblePlay(controllers[controller_i].rumble, 0.5f, 2000);
-
-    uint target_queue_bytes = latency_sample_count * bytes_per_sample; 
-    uint bytes_to_write = target_queue_bytes - SDL_GetQueuedAudioSize(1);
-
-    HHSoundBuffer hh_sound_buffer = {0};
-    hh_sound_buffer.samples_per_second = samples_per_second;
-    hh_sound_buffer.sample_count = bytes_to_write / bytes_per_sample;
-    hh_sound_buffer.samples = samples;
+    // SDL_HapticRumblePlay(controllers[controller_i].haptic, 0.5f, 2000);
 
     hh_render_and_update(&hh_pixel_buffer, &hh_input, &hh_sound_buffer);
     
@@ -281,70 +285,13 @@ main(int argc, char* argv[argc + 1])
 
     SDL_GL_SwapWindow(window);
 
-    prev_input = cur_input;
-    cur_input = (const HHInput){0};
-  }
+    for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED + 1; ++controller_i) {
+      input.controllers[controller_i].stick_x = 0.0f;
+      input.controllers[controller_i].stick_y = 0.0f;
+    } 
   }
 
   return 0;
-}
-
-
-// place inside hh-opengl.c
-void
-rendering()
-{
-  case CLEAR: {
-    glClearColor(1.f, 0.f, 1.f, 0.f);
-    glClear(GL_COLOR_BUFFER_BIT);
-  }
-  case RECTANGLE: {
-    // triangle rendering
-  }
-}
-
-INTERNAL void
-display_pixel_buffer_in_window()
-{
-  glViewport(0, 0, window_width, window_height);
-
-  // This only needs to be done once. IF AT ALL?? JUST USE ARBITRARY INTS??
-  GLunit texture_handle = 0;
-  glGenTextures(1, &texture_handle);
-  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-  // glTexParameteri();
-
-  // NOTE(Ryan): Little endian writes to memory in opposite order as stored in register
-  glBindTexture(GL_TEXTURE_2D, texture_handle);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, buffer->width, buffer->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer->memory);
-  glEnable(GL_TEXTURE_2D);
- 
-  glClearColor(1.f, 0.f, 1.f, 0.f);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  glMatrixMode(GL_MODELVIEW);
-  glLoadIdentity();
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  glMatrixMode(GL_TEXTURE);
-  glLoadIdentity();
-
-  glBegin(GL_TRIANGLES);
-
-  // NOTE(Ryan): Texture is 0,0 --> 1,1
-  glTexCoord2f(.0f, .0f);
-
-  // NOTE(Ryan): Due to clipping to unit cube, put -1, 1
-  glVertex2i(0, 0);
-  glVertex2i(window_width, 0);
-  glVertex2i(window_width, window_height);
-
-  glVertex2i(0, 0);
-  glVertex2i(0, window_height);
-  glVertex2i(window_width, window_height);
-  glEnd();
-
 }
 
 INTERNAL SDL_Rect
@@ -387,3 +334,10 @@ aspect_ratio_fit(uint render_width, uint render_height, uint window_width, uint 
   
   return result;
 }
+
+// compiler can only perform static analysis, we can do dynamic. this means forceinline can be better based on metrics
+// on debug functions, consider using asserts to indicate unlikely scenarios
+void* debug_read_entire_file(char const* file_name)
+{
+
+} 
