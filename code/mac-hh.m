@@ -1,123 +1,153 @@
-#include "hh.h"
-#include "hh.c"
+#include <SDL2/SDL.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <math.h>
 
-#include <AppKit/AppKit.h>
+typedef unsigned int uint;
+typedef uint8_t u8;
+typedef uint32_t u32;
+typedef int16_t int16;
 
-void hid_devices()
+typedef struct {
+  uint samples_per_second;
+  uint sample_count;
+  int16* samples;
+} HHSoundBuffer;
+
+static bool want_to_run = false;
+
+static bool
+sdl_init_audio(u32 samples_per_second)
 {
-  // NOTE(Ryan): CF for core foundation framework
-  // 'k' is hungarian notation for constant
-  IOHIDManagerRef hid_manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
+  SDL_AudioSpec audio_spec = {0};
+  audio_spec.freq = samples_per_second;
+  audio_spec.format = AUDIO_S16LSB;
+  audio_spec.channels = 2;
+  // NOTE(Ryan): This is a chunk of audio data. Rough estimate based on hopeful 60fps.
+  audio_spec.samples = sizeof(int16) * 2 * samples_per_second / 60;
 
-  // NOTE(Ryan): Use these to filter out listed HID devices
-  CFString hid_filter_keys[2];
-  hid_filter_keys[0] = CFSTR(kIOHDDeviceUsagePageKey);
-  hid_filter_keys[1] = CFSTR(kIOHDDeviceUsageKey);
+  if (SDL_OpenAudio(&audio_spec, NULL) < 0) {
+    SDL_Log("Unable to open SDL audio: %s", SDL_GetError());
+    return false;
+  }
 
-  // NOTE(Ryan): constants to identify devices
-  CFDictionaryRef dictionaries[3];
+  if (audio_spec.format != AUDIO_S16LSB) {
+    SDL_Log("Did not recieve desired SDL audio format: %s", SDL_GetError());
+    SDL_CloseAudio();
+    return false;
+  }
+
+  return true;
 }
 
-GLOBAL bool global_want_to_run;
-
-// delegate is an object that responds to nswindow events
-// this means the only methods it has are NSObject and must implement NSWindowDelegate ones
-@interface WindowEventDelegate: NSObject<NSWindowDelegate>
-@end
-@implementation WindowEventDelegate
-
-// id is a pointer to any objective-c object
-- (void)windowWillClose: (id)sender {
-  global_want_to_run = false;
-}
-
-@end
-
-  
-int main(int argc, char* argv[argc + 1])
+static void
+prepare_sound(HHSoundBuffer* sound_buffer)
 {
-  // alloc is required to return usable memory for the object
-  // init sets basic information for the object
-  WindowEventDelegate* window_event_delegate = [[WindowEventDelegate alloc] init];
+  uint amplitude = 3000;
+  uint frequency = 512;
+  uint period = sound_buffer->samples_per_second / frequency;
+  static float tsinf = 0.0f;
 
-  NSRect screen_rect = [[NSScreen mainScreen] frame];
+  int16* sample = sound_buffer->samples;
+  for (uint sample_i = 0; sample_i < sound_buffer->sample_count; ++sample_i) {
+    float sine_value = sinf(tsinf);
+    int16 sample_value = (int16)(sine_value * amplitude);
+    *sample++ = sample_value; 
+    *sample++ = sample_value; 
 
-  NSRect window_rect = NSMakeRect(
-                                  (screen_rect.size.width - 1280) * 0.5f,
-                                  (screen_rect.size.height - 720) * 0.5f,
-                                  1280, 
-                                  720
-                                 );
-
-  NSWindow* window = [[NSWindow alloc] initWithContentRect: window_rect
-                                        styleMask: NSWindowStyleMaskTitled | 
-                                                   NSWindowStyleMaskClosable | 
-                                                   NSWindowStyleMaskMiniaturizable | 
-                                                   NSWindowStyleMaskResizable 
-                                          backing: NSBackingStoreBuffered 
-                                          defer: NO ];
-  [window setTitle: @"Handmade Hero"];
-  [window setBackgroundColor: NSColor.blackColor];
-  // NOTE(Ryan): The key window is the window that currently recieves keyboard events, i.e. is in focus 
-  [window makeKeyAndOrderFront: nil];
-  [window setDelegate: window_event_delegate];
-  window.contentView.wantsLayer = YES;
-
-  uint bitmap_width = 1280;
-  uint bitmap_height = 720;
-  uint bitmap_pitch = bitmap_width * 4;
-  // NOTE(Ryan): System allocator will determine whether to use mmap or other
-  void* memory = malloc(bitmap_pitch * bitmap_height);
-
-  // NOTE(Ryan): Change to core graphics
-  NSBitmapImageRep* image_rep = [[NSBitmapImageRep alloc]
-                                    initWithBitmapDataPlanes: &memory
-                                                  pixelsWide: bitmap_width
-                                                  pixelsHigh: bitmap_height
-                                               bitsPerSample: 8
-                                             samplesPerPixel: 4
-                                                    hasAlpha: YES
-                                                    isPlanar: NO
-                                              colorSpaceName: NSDeviceRGBColorSpace
-                                                 bytesPerRow: bitmap_pitch
-                                                bitsPerPixel: 32];  
-  NSSize image_size = NSMakeSize(bitmap_width, bitmap_height);
-  NSImage* image = [[NSImage alloc] initWithSize: image_size];
-  [image addRepresentation: image_rep];
-  window.contentView.layer.contents = image;
-  
-  printf("width: %f, height: %f: \n", window.contentView.bounds.size.width, window.contentView.bounds.size.height);
-
-  u8* row = (u8 *)memory;
-  for (uint y = 0; y < bitmap_height; ++y) {
-    u32* pixel = (u32 *)row; 
-    for (uint x = 0; x < bitmap_width; ++x) {
-      *pixel++ = 0xffffffff;
+    tsinf += 2.0f * M_PI * 1.0f / (float)period; 
+    if (tsinf > 2.0f * M_PI) {
+      tsinf -= 2.0f * M_PI; 
     }
-    row += bitmap_pitch;
   }
- 
-  global_want_to_run = true;
-  while (global_want_to_run) {
-    NSEvent* event = nil; 
+}
 
-    do {
-      event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                 untilDate: nil
-                                    inMode: NSDefaultRunLoopMode
-                                   dequeue: YES];
-      switch ([event type]) {
-        default: {
-          [NSApp sendEvent: event];
-        } 
+static inline void
+nop(void)
+{
+  return;
+}
+
+int 
+main(int argc, char* argv[argc + 1])
+{
+  nop();
+  // NOTE(Ryan): If we wanted to use specific drivers, we could use SDL_AudioInit()
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_AUDIO) < 0) {
+    // TODO(Ryan): Implement organised logging when game is nearly complete
+    //             and want to ascertain failure points across different end user machines.
+    SDL_Log("Unable to initialise SDL: %s", SDL_GetError());
+    return EXIT_FAILURE;
+  }
+
+  uint window_width = 1280;
+  uint window_height = 720;
+  SDL_Window* window = SDL_CreateWindow(
+                                        "Handmade Hero", 
+                                        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                                        window_width, window_height, 
+                                        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+                                       );
+  if (window == NULL) {
+    SDL_Log("Unable to create SDL window: %s", SDL_GetError());
+    return EXIT_FAILURE;
+  }
+
+  uint samples_per_second = 48000;
+  bool sound_is_available = sdl_init_audio(samples_per_second);
+  HHSoundBuffer sound_buffer = {0};
+
+  if (sound_is_available) {
+    // NOTE(Ryan): At 60fps, this will be 4 frames worth of audio data.
+    uint latency_fraction = 15;
+    uint num_game_samples = samples_per_second / latency_fraction; 
+
+    sound_buffer.samples_per_second = samples_per_second;
+    sound_buffer.samples = calloc(num_game_samples, sizeof(int16) * 2);
+    sound_buffer.sample_count = num_game_samples;
+  }
+  
+
+  want_to_run = true;
+  while (want_to_run) {
+    SDL_Event event = {0};
+    while (SDL_PollEvent(&event) != 0) {
+     switch (event.type) {
+       case SDL_QUIT: {
+        want_to_run = false; 
+       } break;
+       case SDL_WINDOWEVENT: {
+         if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+           want_to_run = false;             
+         }
+       } break;
+     }
+    }
+
+    // NOTE(Ryan): Sample rate is independent of channel, i.e. both sampled at 40kHz
+    // latency = queue_size() / (samples_per_second * 2 * sizeof(int16)
+
+    uint target_queue_bytes = sound_buffer.sample_count * sizeof(int16) * 2;
+    // NOTE(Ryan): As some frames will run longer than expected, have extra padding bytes to ensure no silence.
+    // However, we need to prevent a build up of queued audio data.
+    uint bytes_to_write = 0;
+    if (SDL_GetQueuedAudioSize(1) < target_queue_bytes) {
+      bytes_to_write = target_queue_bytes - SDL_GetQueuedAudioSize(1); 
+    }
+
+    if (sound_is_available) {
+      prepare_sound(&sound_buffer);
+
+      SDL_QueueAudio(1, sound_buffer.samples, bytes_to_write);
+
+      if (SDL_GetAudioStatus() != SDL_AUDIO_PLAYING) {
+        SDL_Log("Playing audio");
+        SDL_PauseAudio(0); 
       }
-    
-    } while (event != nil);
+    }
 
-    hh_render_gradient();
-
-    mac_display_pixel_buffer_in_window(window);
-  }
+   }
 
   return 0;
 }
+
