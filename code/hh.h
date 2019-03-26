@@ -1,3 +1,19 @@
+RenderCommands commands = {0};
+intialize_render_commands(&commands, pixel_buffer_width, pixel_buffer_height, push_buffer_size, push_buffer);
+
+
+game_update_and_render(RenderCommands* render_commands);
+
+sdl_display_buffer(RenderCommands* render_commands)
+{
+  sort_entries(commands, temp_mem);
+}
+
+
+
+
+
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
