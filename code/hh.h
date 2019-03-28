@@ -1,12 +1,55 @@
-RenderCommands commands = {0};
-intialize_render_commands(&commands, pixel_buffer_width, pixel_buffer_height, push_buffer_size, push_buffer);
+typedef struct {
+  FILE* file_handle;
+  FILE* memory_map;
+  char file_name[256];
+  void* memory_block;
+} SDLReplayBuffer; 
+
+typedef struct {
+  u64 game_memory_size;
+  void* game_memory_block;
+  SDLReplayBuffer replay_buffers[4];
+
+  FILE* recording_handle;
+  int input_recording_index;
+
+  FILE* playback_handle;
+  int input_playing_index;
+
+  char exe_file_name[256];
+  char* one_past_last_exe_file_name_slash;
+} SDLState;
 
 
-game_update_and_render(RenderCommands* render_commands);
 
-sdl_display_buffer(RenderCommands* render_commands)
+int 
+main(void)
 {
-  sort_entries(commands, temp_mem);
+  SDLState state = {0};
+  state.exe_file_name = SDL_GetBasePath(); // concatenate file name
+
+  char* hh_dynamic_object_path = state.exe_file_name + "hh.so";
+
+  state.game_memory_size = memory.perm_size + memory.trans_size;
+  state.game_memory_block = malloc(state.game_memory_size);
+
+  for (uint replay_index = 0; replay_index < ARRAY_COUNT(state.replay_buffers); ++replay_index) {
+    SDLReplayBuffer* replay_buffer = &state.replay_buffers[replay_index]; 
+
+    // initialize replay buffers here 
+  }
+
+  while (looping) {
+    // handle 'l' key in to handle replay
+    if (state.input_recording_index) {
+      sdl_record_input(&state, input); 
+    }
+    if (state.input_playing_index) {
+      sdl_playback_input(&state, input); 
+    }
+  }
+
+  return 0;
 }
 
 
