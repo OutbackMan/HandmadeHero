@@ -131,10 +131,13 @@ sdl_unload_hh_api(SDLHHApi* hh_api)
 }
 
 typedef struct {
-  SDL_RWops* file_handle;
-  SDL_RWops* file_memory_map;
-  char file_name[256];
+  SDL_RWops* input_handle;
+  SDL_RWops* memory_memory_map_handle;
+  char memory_file_name[256];
+  char input_file_name[256];
   void* memory_block;
+  // NOTE(Ryan): Only allocate if not used yet.
+  bool is_initialized;
 } SDLReplayBuffer; 
 
 #define NUM_REPLAY_BUFFERS 4
@@ -148,11 +151,7 @@ typedef struct {
 
   FILE* playback_handle;
   int input_playing_index;
-
-  char exe_file_name[256];
-  char* one_past_last_exe_file_name_slash;
 } SDLState;
-
 
 INTERNAL STATUS
 sdl_init_audio(u32 samples_per_second)
@@ -382,16 +381,40 @@ main(int argc, char* argv[argc + 1])
     input.controllers[0].back = keyboard_state[SDL_SCANCODE_ESCAPE];
 
 #if defined(DEBUG)
-    if (keyboard_state[SDL_SCANCODE_L]) {
+    // HAVE R0 --> P0
+    // COPY MEMORY OVER, THEN DO INPUT
+    if (keyboard_state[SDL_SCANCODE_R]) {
+      uint replay_buffer_i = -1;
+      if (keyboard_state[SDL_SCANCODE_0]) {
+        replay_buffer_i = 0; 
+      }
       if (sdl_state->input_playing_index == 0) {
         if (sdl_state->input_recording_index == 0) {
-          sdl_begin_recording_input(sdl_state, 1);
+          // sdl_begin_recording_input(sdl_state, 1);
+          SDLReplayBuffer* replay_buffer =  &sdl_state.replay_buffers[1];
+          if (replay_buffer->memory_block != NULL) {
+            sdl_state->input_recording_index = 1; 
+            char* file_name = "c:asdasd/asdas/dasd/loop_edit<slot><input>.hmi";
+            sdl_state->recording_handle = file_name;
+            memcpy(replay_buffer->memory_block, sdl_state->game_memory_block, sdl_state->total_size);  
+          }
         } else {
-          sdl_end_recording_input(state);
-          sdl_begin_input_playback(state, 1);
+          // sdl_end_recording_input(state);
+          close_file(sdl_state->recording_handle);
+          sdl_state->input_recording_index = 0;
+          // sdl_begin_input_playback(state, 1);
+          SDLReplayBuffer* replay_buffer =  &sdl_state.replay_buffers[1];
+          if (replay_buffer->memory_block != NULL) {
+            sdl_state->input_playing_index = 1; 
+            char* file_name = "c:asdasd/asdas/dasd/loop_edit<slot><input>.hmi";
+            sdl_state->playback_handle = file_name;
+            memcpy(sdl_state->game_memory_block, replay_buffer->memory_block, sdl_state->total_size);  
+          }
         }
       } else {
-        sdl_end_input_playback(state); 
+        // sdl_end_input_playback(state); 
+        close_file(sdl_state->playback_handle);
+        sdl_state->input_playing_index = 0;
       }
     } 
 #endif
@@ -467,11 +490,19 @@ main(int argc, char* argv[argc + 1])
     }
 
     if (sdl_state.input_recording_index) {
-      sdl_record_input(&sdl_state, input); 
+      // sdl_record_input(&sdl_state, input); 
+      write_file(sdl_state->recording_handle, input, sizeof(input));
     }
 
     if (sdl_state.input_playing_index) {
-      sdl_playback_input(&sdl_state, input); 
+      // sdl_playback_input(&sdl_state, input); 
+      read_file(sdl_state->playback_handle, input, sizeof(input));
+      // reached end of stream
+      if (bytes_read == 0) {
+        sdl_end_input_playback(sdl_state);
+        sdl_begin_input_playback(sdl_state, sdl_state->input_playing_index;
+        read_file(sdl_state->playback_handle, input, sizeof(input));
+      }
     }
 
     if (hh_api->update_and_render != NULL) {
