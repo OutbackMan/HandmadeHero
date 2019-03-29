@@ -95,34 +95,39 @@ sdl_normalize_stick(int16 stick_value)
 
 typedef struct {
   void* handle;
-  void (*render_and_update)(HHPixelBuffer*, HHInput*, HHSoundBuffer*, HHMemory*);
+  void (*update_and_render)(HHPixelBuffer*, HHInput*, HHSoundBuffer*, HHMemory*);
   uint last_modification_time;
 } SDLHHApi;
 
 INTERNAL void
 sdl_load_hh_api(SDLHHApi* hh_api)
 {
-  code->handle = SDL_LoadObject(sdl_info.object_file_name);
+  hh_api->handle = SDL_LoadObject(sdl_info.abs_object_file_name);
   if (code->handle == NULL) {
-    SDL_Log("Unable to load hh code: %s", SDL_GetError());
+    SDL_LogCritical("Unable to load hh api handle: %s", SDL_GetError());
+    hh_api->update_and_render = NULL;
+    hh_api->last_modification_time = 0;
+    return;
   } else {
-    code->random = (void (*)(void))SDL_LoadFunction(hh_code, "random");
-    if (code->random == NULL) {
-      printf("Unable to load hh code function: %s", SDL_GetError());
-      fflush(stdout);
+    hh_api->update_and_render = \
+      (void (*)(HHPixelBuffer*, HHInput*, HHSoundBuffer*, HHMemory*))SDL_LoadFunction(hh_code, "hh_update_and_render");
+    if (hh_api->update_and_render == NULL) {
+      SDL_LogCritical("Unable to load hh api render and update function: %s", SDL_GetError());
+      hh_api->last_modification_time = 0;
+      return;
     }
 
-    struct stat code_stat = {0};
-    stat("random.dll", &code_stat);
-    code->mod_time = code_stat.st_mtime;
+    struct stat api_stat = {0};
+    stat(sdl_info.abs_object_file_name, &api_stat);
+    hh_api->last_modification_time = api_stat.st_mtime;
   }
 }
 
-static void
-sdl_unload_hh_code(HHCode* code)
+INTERNAL void
+sdl_unload_hh_api(SDLHHApi* hh_api)
 {
-  SDL_UnloadObject(code->random);
-  code->handle = NULL;
+  SDL_UnloadObject(hh_api->handle);
+  hh_api->update_and_render = NULL;
 }
 
 typedef struct {
@@ -158,14 +163,17 @@ sdl_init_audio(u32 samples_per_second)
   audio_spec.samples = sizeof(int16) * 2 * samples_per_second / 60;
 
   if (SDL_OpenAudio(&audio_spec, NULL) < 0) {
-    SDL_Log("Unable to open SDL audio: %s", SDL_GetError());
-    return;
+    SDL_LogWarn("Unable to open SDL audio: %s", SDL_GetError());
+    return FAILED;
   }
 
   if (audio_spec.format != AUDIO_S16LSB) {
-    SDL_Log("Did not recieve desired SDL audio format: %s", SDL_GetError());
+    SDL_LogWarn("Did not recieve desired SDL audio format: %s", SDL_GetError());
     SDL_CloseAudio();
+    return FAILED;
   }
+
+  return SUCCEEDED;
 }
 
 PERSIST struct {
@@ -180,14 +188,8 @@ PERSIST struct {
   char* base_path;
   int gl_major_version;
   int gl_minor_version;
-  char object_file_name[256];
+  char abs_object_file_name[256];
 } sdl_info;
-
-void
-sdl_debug_log_function(void* user_data, int category, SDL_LogPriority priority, char const* msg)
-{
-  puts(msg); fflush(stdout);
-}
 
 INTERNAL void
 sdl_get_info(void)
@@ -206,13 +208,21 @@ sdl_get_info(void)
   if (SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &sdl_info.gl_minor_version) < 0) {
     SDL_LogWarn("Unable to obtain opengl minor version: %s", SDL_GetError());
   };
+
+  strcpy(sdl_info.abs_object_file_name, sdl_info.base_path);
 #if defined(LINUX)
-  strcpy(sdl_info.object_file_name, "x86_64-desktop-sdl-hh.so");
+  strcat(sdl_info.abs_object_file_name, "x86_64-desktop-sdl-hh.so");
 #elif defined(WINDOWS)
-  strcpy(sdl_info.object_file_name, "x86_64-desktop-sdl-hh.dll");
+  strcat(sdl_info.abs_object_file_name, "x86_64-desktop-sdl-hh.dll");
 #elif defined(MAC)
-  strcpy(sdl_info.object_file_name, "x86_64-desktop-sdl-hh.dylib");
+  strcat(sdl_info.abs_object_file_name, "x86_64-desktop-sdl-hh.dylib");
 #endif
+}
+
+void
+sdl_debug_log_function(void* user_data, int category, SDL_LogPriority priority, char const* msg)
+{
+  puts(msg); fflush(stdout);
 }
 
 GLOBAL bool want_to_run = false;
@@ -259,10 +269,29 @@ main(int argc, char* argv[argc + 1])
     return EXIT_FAILURE;
   }
 
-  sdl_init_audio(48000);
+  HHPixelBuffer pixel_buffer = {0};
+  pixel_buffer.width = window_width;
+  pixel_buffer.height = window_height;
+  pixel_buffer.pitch = window_width * 4;
+  pixel_buffer.memory = malloc(pixel_buffer.pitch * pixel_buffer.height);
+  if (pixel_buffer.memory == NULL) {
+    SDL_LogCritical("Unable to allocate memory for hh pixel buffer: %s", strerror(errno));
+    return EXIT_FAILURE;
+  }
 
-  SDLInfo info = {0};
-  sdl_get_info(&info);
+  uint samples_per_second = 48000;
+  STATUS have_sound = sdl_init_audio(samples_per_second);
+  HHSoundBuffer sound_buffer = {0};
+
+  if (have_sound) {
+    // NOTE(Ryan): At 60fps, this will be 4 frames worth of audio data.
+    uint latency_fraction = 15;
+    uint num_game_samples = samples_per_second / latency_fraction; 
+
+    sound_buffer.samples_per_second = samples_per_second;
+    sound_buffer.samples = calloc(num_game_samples, sizeof(int16) * 2);
+    sound_buffer.sample_count = num_game_samples;
+  }
 
   HHMemory memory = {0};
   memory.permanent_storage_size = MEGABYTES(64);
@@ -274,19 +303,16 @@ main(int argc, char* argv[argc + 1])
     return EXIT_FAILURE;
   }
   memory.transient_storage = ((u8 *)memory.permanent_storage + memory.permanent_storage_size);
+  memory.platform_debug_read_entire_file = platform_debug_read_entire_file;
+  memory.platform_debug_write_entire_file = platform_debug_write_entire_file;
+
+  SDLHHApi hh_api = {0};
+  sdl_load_hh_api(&hh_api);
+
+  sdl_populate_info();
 
   sdl_find_game_controllers();
 
-  HHPixelBuffer pixel_buffer = {0};
-  pixel_buffer.memory = malloc();
-
-
-  // NOTE(Ryan): Hardware sound buffer is 1 second long. We only want to write a small amount of this to avoid latency issues
-  uint latency_sample_count = samples_per_second / 15;
-  int16* samples = calloc(latency_sample_count, bytes_per_sample);
-
-
-  
   HHInput input = {0};
   // TODO(Ryan): Add support for multiple keyboards.
   input.controllers[0].is_connected = true;
@@ -415,28 +441,45 @@ main(int argc, char* argv[argc + 1])
         input.controllers[game_controller_i].is_connected = false; 
         input.controllers[game_controller_i].is_analog = false; 
       }
+      // SDL_HapticRumblePlay(controllers[controller_i].haptic, 0.5f, 2000);
     }
 
-    // SDL_HapticRumblePlay(controllers[controller_i].haptic, 0.5f, 2000);
-
-    hh_render_and_update(&hh_pixel_buffer, &hh_input, &hh_sound_buffer);
+    if (hh_api->update_and_render != NULL) {
+      hh_api->update_and_render(&hh_pixel_buffer, &hh_input, &hh_sound);
+    }
     
-    SDL_QueueAudio(1, samples, bytes_to_write);
+    opengl_display_pixel_buffer(&pixel_buffer);
+    SDL_GL_SwapWindow(window);
 
-    // SDL_GetAudioStatus() == SDL_AUDIO_PLAYING
-    if (!sound_is_playing) {
-      SDL_PauseAudio(0); 
-      sound_is_playing = true;
+    uint target_queue_bytes = sound_buffer.sample_count * sizeof(int16) * 2;
+    // NOTE(Ryan): As some frames will run longer than expected, have extra padding bytes to ensure no silence.
+    // However, we need to prevent a build up of queued audio data.
+    uint bytes_to_write = 0;
+    if (SDL_GetQueuedAudioSize(1) < target_queue_bytes) {
+      bytes_to_write = target_queue_bytes - SDL_GetQueuedAudioSize(1); 
     }
 
-    opengl_display_pixel_buffer(&pixel_buffer);
+    if (have_sound) {
+      SDL_QueueAudio(1, sound_buffer.samples, bytes_to_write);
 
-    SDL_GL_SwapWindow(window);
+      if (SDL_GetAudioStatus() != SDL_AUDIO_PLAYING) {
+        SDL_PauseAudio(0); 
+      }
+    }
 
     for (uint controller_i = 0; controller_i < NUM_GAME_CONTROLLERS_SUPPORTED + 1; ++controller_i) {
       input.controllers[controller_i].stick_x = 0.0f;
       input.controllers[controller_i].stick_y = 0.0f;
     } 
+
+    struct stat hh_api_stat = {0};
+    stat(sdl_info.abs_object_file_name, &hh_api_stat);
+    if (hh_api_stat.st_mtime > hh_api->last_modification_time) {
+      sdl_unload_hh_api(&hh_api); 
+      sdl_reload_hh_api(&hh_api); 
+      hh_api->last_modification_time = hh_api_stat.st_mtime;
+    }
+
   }
 
   return 0;
