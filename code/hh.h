@@ -137,10 +137,11 @@ typedef struct {
   void* memory_block;
 } SDLReplayBuffer; 
 
+#define NUM_REPLAY_BUFFERS 4
 typedef struct {
   u64 game_memory_size;
   void* game_memory_block;
-  SDLReplayBuffer replay_buffers[4];
+  SDLReplayBuffer replay_buffers[NUM_REPLAY_BUFFERS];
 
   FILE* recording_handle;
   int input_recording_index;
@@ -309,6 +310,16 @@ main(int argc, char* argv[argc + 1])
   SDLHHApi hh_api = {0};
   sdl_load_hh_api(&hh_api);
 
+#if defined(DEBUG)
+  for (uint replay_i = 0; replay_i < NUM_REPLAY_BUFFERS; ++replay_i) {
+    SDLReplayBuffer* replay_buffer = &sdl_state.replay_buffers[replay_i];
+
+    strcpy(replay_buffer->file_name, "c:/asdsad/sdasd/loop_edit<slot><state>.hmi");
+    replay_buffer->memory_block = malloc(total_memory_size);
+    replay_buffer->file_handle = SDL_RWFromMem(replay_buffer->memory_block, total_memory_size);
+  }
+#endif
+
   sdl_populate_info();
 
   sdl_find_game_controllers();
@@ -318,6 +329,8 @@ main(int argc, char* argv[argc + 1])
   input.controllers[0].is_connected = true;
 
   u8 const* keyboard_state = SDL_GetKeyboardState(NULL);
+
+  // TODO(Ryan): Timing
 
   want_to_run = true;
   while (want_to_run) {
@@ -370,7 +383,16 @@ main(int argc, char* argv[argc + 1])
 
 #if defined(DEBUG)
     if (keyboard_state[SDL_SCANCODE_L]) {
-    
+      if (sdl_state->input_playing_index == 0) {
+        if (sdl_state->input_recording_index == 0) {
+          sdl_begin_recording_input(sdl_state, 1);
+        } else {
+          sdl_end_recording_input(state);
+          sdl_begin_input_playback(state, 1);
+        }
+      } else {
+        sdl_end_input_playback(state); 
+      }
     } 
 #endif
 
@@ -442,6 +464,14 @@ main(int argc, char* argv[argc + 1])
         input.controllers[game_controller_i].is_analog = false; 
       }
       // SDL_HapticRumblePlay(controllers[controller_i].haptic, 0.5f, 2000);
+    }
+
+    if (sdl_state.input_recording_index) {
+      sdl_record_input(&sdl_state, input); 
+    }
+
+    if (sdl_state.input_playing_index) {
+      sdl_playback_input(&sdl_state, input); 
     }
 
     if (hh_api->update_and_render != NULL) {
