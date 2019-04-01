@@ -2,22 +2,9 @@
 #include <SDL2/SDL_opengl.h>
 #include <stddef.h>
 
-#include "hh.h"
+#include "hh-platform.h"
 #include "hh-opengl.c"
-
-// TODO(Ryan): Put this in a separate file
-typedef struct {
-  uint length;
-  uint capacity;
-  char* buffer;
-} BufferHeader;
-
-// define xmalloc, xcalloc
-
-#define __BUFFER_HEADER(b) ((BufferHeader *)((char* )(b) - offsetof(BufferHeader, buffer)))
-#define BUFFER_LENGTH(b) ((b != NULL) ? __BUFFER_HEADER(b)->length : 0)
-#define BUFFER_CAPACITY(b) ((b != NULL) ? __BUFFER_HEADER(b)->capacity : 0)
-#define BUFFER_PUSH(b, ...) 
+#include "hh-common.c"
 
 #define INT32_MIN_VALUE -2147483648
 #define UNUSED_SDL_INSTANCE_JOYSTICK_ID INT32_MIN_VALUE
@@ -110,6 +97,7 @@ sdl_normalize_stick(int16 stick_value)
 typedef struct {
   void* handle;
   void (*update_and_render)(HHPixelBuffer*, HHInput*, HHSoundBuffer*, HHMemory*);
+  // perhaps also pass in logging functions
   uint last_modification_time;
 } SDLHHApi;
 
@@ -641,7 +629,6 @@ main(int argc, char* argv[argc + 1])
   return 0;
 }
 
-// TODO(Ryan): Change to stdlib
 void
 platform_debug_read_entire_file(char const* file_name, HHDebugPlatformReadFileResult* read_file_result)
 {
