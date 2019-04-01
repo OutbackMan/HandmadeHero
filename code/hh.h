@@ -1,9 +1,23 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <stddef.h>
 
 #include "hh.h"
-#include "hh.c"
 #include "hh-opengl.c"
+
+// TODO(Ryan): Put this in a separate file
+typedef struct {
+  uint length;
+  uint capacity;
+  char* buffer;
+} BufferHeader;
+
+// define xmalloc, xcalloc
+
+#define __BUFFER_HEADER(b) ((BufferHeader *)((char* )(b) - offsetof(BufferHeader, buffer)))
+#define BUFFER_LENGTH(b) ((b != NULL) ? __BUFFER_HEADER(b)->length : 0)
+#define BUFFER_CAPACITY(b) ((b != NULL) ? __BUFFER_HEADER(b)->capacity : 0)
+#define BUFFER_PUSH(b, ...) 
 
 #define INT32_MIN_VALUE -2147483648
 #define UNUSED_SDL_INSTANCE_JOYSTICK_ID INT32_MIN_VALUE
@@ -228,8 +242,8 @@ main(int argc, char* argv[argc + 1])
     return EXIT_FAILURE;
   }
 
-  uint window_width = 1280;
-  uint window_height = 720;
+  uint window_width = 1920;
+  uint window_height = 1080;
   u32 window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
 #if defined(DEBUG)
   if (strcmp(info.video_driver, "x11")) {
@@ -253,18 +267,26 @@ main(int argc, char* argv[argc + 1])
   SDL_ShowCursor(SDL_DISABLE);
 #endif
 
-  // handle variable sync monitors
-  SDL_GLContext context = SDL_GL_CreateContext(window);
-  if (SDL_GL_SetSwapInterval(1) < 0) {
-    SDL_LogCritical("Unable to enable vsync for sdl opengl context: %s", SDL_GetError());
-    // TODO(Ryan): Investigate if this occurs frequently enough to merit a fallback.
-    return EXIT_FAILURE;
+  bool need_to_compute_refresh_rate = true;
+  uint refresh_rate = 0;
+
+  if (need_to_compute_refresh_rate) {
+    SDL_DisplayMode display_mode = {0};
+    int display_index = SDL_GetWindowDisplayIndex(window);
+    SDL_GetCurrentDisplayMode(display_index, &display_mode);
+    // NOTE(Ryan): This handles the case of variable refresh rate.
+    refresh_rate = (display_mode.refresh_rate == 0) ? 60 : display_mode.refresh_rate;
   }
 
-  bool window_is_fullscreen = false;
-  // will need to implement aspect ratio for complete fullscreen support with opengl
-  // if (SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN) < 0) {alt+enter}
-  // TODO(Ryan): refresh rate
+  SDL_GLContext context = SDL_GL_CreateContext(window);
+  if (SDL_GL_SetSwapInterval(-1) < 0) {
+    SDL_LogDebug("Unable to enable adaptive vsync for sdl opengl context: %s", SDL_GetError());
+    if (SDL_GL_SetSwapInterval(1) < 0) {
+      SDL_LogCritical("Unable to enable vsync for sdl opengl context: %s", SDL_GetError());
+      // TODO(Ryan): Investigate if this occurs frequently enough to merit a fallback.
+      return EXIT_FAILURE;
+    }
+  }
 
   HHPixelBuffer pixel_buffer = {0};
   pixel_buffer.width = window_width;
@@ -328,8 +350,8 @@ main(int argc, char* argv[argc + 1])
 
   sdl_find_game_controllers();
 
-  HHInput input = {0};
   // TODO(Ryan): Add support for multiple keyboards.
+  HHInput input = {0};
   input.controllers[0].is_connected = true;
 
   u8 const* keyboard_state = SDL_GetKeyboardState(NULL);
@@ -338,6 +360,10 @@ main(int argc, char* argv[argc + 1])
 
   want_to_run = true;
   while (want_to_run) {
+    if (need_to_compute_refresh_rate) {
+    
+      input.frame_dt = 1 / refresh_rate;
+    }
     SDL_Event event = {0};
     while (SDL_PollEvent(&event) != 0) {
      switch (event.type) {
@@ -347,6 +373,10 @@ main(int argc, char* argv[argc + 1])
        case SDL_WINDOWEVENT: {
          if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
            want_to_run = false;             
+         }
+         if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+           window_width = event.window.data1; 
+           window_height = event.window.data2; 
          }
 #if defined(DEBUG) 
          if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
@@ -384,7 +414,6 @@ main(int argc, char* argv[argc + 1])
 
     input.controllers[0].start = keyboard_state[SDL_SCANCODE_RETURN];
     input.controllers[0].back = keyboard_state[SDL_SCANCODE_ESCAPE];
-
 
     u32 mouse_state = SDL_GetMouseState(&input.mouse_x, &input.mouse_y);
     input.left_mouse_button = mouse_state & SDL_BUTTON(SDL_BUTTON_LEFT);
@@ -454,6 +483,16 @@ main(int argc, char* argv[argc + 1])
         input.controllers[game_controller_i].is_analog = false; 
       }
       // SDL_HapticRumblePlay(controllers[controller_i].haptic, 0.5f, 2000);
+    }
+
+    if (keyboard_state[SDL_SCANCODE_LALT] && keyboard_state[SDL_SCANCODE_RETURN]) {
+      u32 window_flags = SDL_GetWindowFlags(window);
+      if (window_flags & SDL_WINDOW_FULLSCREEN) {
+        SDL_SetWindowFullscreen(window, 0); 
+      } else {
+        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN); 
+      }
+      need_to_compute_refresh_rate = true;
     }
 
 #if defined(DEBUG)
@@ -563,7 +602,9 @@ main(int argc, char* argv[argc + 1])
       hh_api->update_and_render(&hh_pixel_buffer, &hh_input, &hh_sound);
     }
     
-    opengl_display_pixel_buffer(&pixel_buffer);
+
+    SDL_Rect drawable_region = aspect_ratio_fit(pixel_buffer->width, pixel_buffer->height, window_width, window_height);
+    opengl_display_pixel_buffer(&pixel_buffer, &drawable_region);
     SDL_GL_SwapWindow(window);
 
     uint target_queue_bytes = sound_buffer.sample_count * sizeof(int16) * 2;
@@ -600,6 +641,7 @@ main(int argc, char* argv[argc + 1])
   return 0;
 }
 
+// TODO(Ryan): Change to stdlib
 void
 platform_debug_read_entire_file(char const* file_name, HHDebugPlatformReadFileResult* read_file_result)
 {
