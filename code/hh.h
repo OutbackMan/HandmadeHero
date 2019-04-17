@@ -1,3 +1,14 @@
+/*
+  mkdir sdl-build/ && cd sdl-build/ && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .
+  
+*/
+
+
+
+
+
+
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <stddef.h>
