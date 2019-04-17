@@ -1,13 +1,10 @@
 /*
-  mkdir sdl-build/ && cd sdl-build/ && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .
-  
+  mkdir sdl-debug-build/ && cd sdl-debug-build/ && 
+    cmake -DCMAKE_BUILD_TYPE=Debug -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF .. && 
+    cmake --build . -- -j %NUMBER_OF_PROCESSORS%
+    cmake --build . -- -j $(getconf _NPROCESSORS_ONLN)
+    gcc -pipe ???
 */
-
-
-
-
-
-
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
